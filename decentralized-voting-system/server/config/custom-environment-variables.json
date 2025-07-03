@@ -1,0 +1,6 @@
+{
+  "jwtSecret": "JWT_SECRET",
+  "sepoliaRpcUrl": "SEPOLIA_RPC_URL",
+  "voterRegistryAddress": "VOTER_REGISTRY_ADDRESS",
+  "adminPrivateKey": "ADMIN_PRIVATE_KEY"
+}

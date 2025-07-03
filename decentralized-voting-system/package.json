@@ -1,0 +1,17 @@
+{
+  "name": "decentralized-voting-root",
+  "version": "1.0.0",
+  "description": "Root for decentralized voting system",
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy": "hardhat run scripts/deploy.js --network sepolia"
+  },
+  "dependencies": {
+    "ethers": "^6.10.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.6"
+  }
+}

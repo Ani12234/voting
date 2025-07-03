@@ -1,0 +1,7 @@
+{
+  "jwtSecret": "default_secret",
+  "sepoliaRpcUrl": "",
+  "voterRegistryAddress": "",
+  "adminPrivateKey": "",
+  "VOTING_CONTRACT_ADDRESS": ""
+}
