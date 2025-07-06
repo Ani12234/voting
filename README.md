@@ -1,6 +1,6 @@
 # Decentralized Voting System
 
-![Voting Banner](https://user-images.githubusercontent.com/100433178/206897183-19d84f8a-4c3f-4a4e-8b1b-3672d8a8e3b9.png)
+![Decentralized Voting System Banner](https://images.unsplash.com/photo-1639762681057-408e52192e56?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)
 
 
 ## Overview
