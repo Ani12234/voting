@@ -1,6 +1,6 @@
 # Decentralized Voting System
 
-![Decentralized Voting System Banner](https://images.unsplash.com/photo-1639762681057-408e52192e56?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)
+![Decentralized Voting System Banner](https://www.google.com/url?sa=i&url=https%3A%2F%2Fpixelplex.io%2Fblog%2Fblockchain-voting%2F&psig=AOvVaw3R-5J1weU2x7rPHFiy9y8H&ust=1751911411751000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCNC_zN3oqI4DFQAAAAAdAAAAABAE)
 
 
 ## Overview
