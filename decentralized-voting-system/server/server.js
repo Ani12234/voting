@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
+const connectDB = require('./config/db');
 const web3 = require('web3');
 const jwt = require('jsonwebtoken');
 
@@ -39,33 +39,15 @@ const auth = (req, res, next) => {
     }
 };
 
-// MongoDB Connection
-const uri = process.env.MONGODB_URI;
-if (!uri) {
-    console.error('MONGODB_URI not found in environment variables');
-    process.exit(1);
-}
-
-// MongoDB connection options
-const mongoOptions = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-    family: 4
-};
-
-// Connect to MongoDB
-mongoose.set('strictQuery', false); // To suppress deprecation warning
-mongoose.connect(uri, mongoOptions)
-.then(() => console.log('MongoDB Connected'))
-.catch(err => console.error('MongoDB connection error:', err));
+// Connect to Database
+connectDB();
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/voters', require('./routes/voters'));
 app.use('/api/polls', require('./routes/polls'));
 app.use('/api/otp', require('./routes/otp'));
+app.use('/api/invoice', require('./routes/invoice'));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

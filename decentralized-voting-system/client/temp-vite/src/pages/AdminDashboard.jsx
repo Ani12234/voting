@@ -24,6 +24,7 @@ const AdminDashboard = () => {
   const [editingPoll, setEditingPoll] = useState(null);
   const [debugWallet, setDebugWallet] = useState('');
   const [debugResult, setDebugResult] = useState(null);
+  const [isResetting, setIsResetting] = useState(false);
   const [newPoll, setNewPoll] = useState({
     title: '',
     description: '',
@@ -105,6 +106,28 @@ const AdminDashboard = () => {
       fetchVoters(); // Refresh the list
     } catch (err) {
       setError('Failed to update voter status.');
+    }
+  };
+
+  const handleResetData = async () => {
+    if (window.confirm('Are you sure you want to delete all poll and vote data? This action cannot be undone.')) {
+      setIsResetting(true);
+      try {
+        const token = getAuthToken();
+        if (!token) return;
+
+        const response = await axios.post(`${API_BASE_URL}/api/admin/data/reset`, {}, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        toast.success(response.data.message);
+        fetchPolls(); // Refresh the polls list
+      } catch (err) {
+        toast.error('Failed to reset data.');
+        console.error(err);
+      } finally {
+        setIsResetting(false);
+      }
     }
   };
 
@@ -346,6 +369,14 @@ const AdminDashboard = () => {
               <p className="text-gray-500">No polls found.</p>
             )}
           </div>
+        </Card>
+
+        <Card>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Reset Poll Data</h2>
+          <p className="text-gray-600 mb-4">This will delete all existing polls and votes from the database. This is useful after a contract redeployment to clear outdated data.</p>
+          <Button variant="danger" onClick={handleResetData} disabled={isResetting}>
+            {isResetting ? 'Resetting...' : 'Reset All Poll & Vote Data'}
+          </Button>
         </Card>
 
         <Card>

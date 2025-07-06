@@ -7,6 +7,7 @@ import Polls from './pages/Polls';
 import AdminDashboard from './pages/AdminDashboard';
 import VoterDashboard from './pages/VoterDashboard';
 import Results from './pages/Results';
+import VoteHistory from './pages/VoteHistory'; // Import the new page
 import AdminLogin from './pages/AdminLogin';
 import VoterLogin from './pages/VoterLogin';
 import { AccountProvider, useAccountContext } from './context/AccountContext.jsx';
@@ -59,6 +60,14 @@ function App() {
                 element={
                   <PrivateRoute>
                     <Results />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="history" 
+                element={
+                  <PrivateRoute>
+                    <VoteHistory />
                   </PrivateRoute>
                 } 
               />

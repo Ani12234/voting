@@ -21,7 +21,6 @@ const voteSchema = new mongoose.Schema({
     }
 }, { collection: 'votes' });
 
-// To ensure a voter can only vote once per poll
-voteSchema.index({ poll: 1, voter: 1 }, { unique: true });
+
 
 module.exports = mongoose.model('Vote', voteSchema);

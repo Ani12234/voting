@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Voter = require('../models/Voter');
+const Poll = require('../models/Poll');
+const Vote = require('../models/Vote');
 const auth = require('../middleware/auth');
 
 // Get all pending registrations
@@ -103,6 +105,34 @@ router.get('/voters', auth.authenticate, auth.isAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching voters',
+            error: error.message
+        });
+    }
+});
+
+// Endpoint to clear all poll and vote data (admin only)
+router.post('/data/reset', [auth.authenticate, auth.isAdmin], async (req, res) => {
+    try {
+        console.log('Attempting to reset poll and vote data...');
+        
+        const pollDeletionResult = await Poll.deleteMany({});
+        const voteDeletionResult = await Vote.deleteMany({});
+        
+        console.log(`Polls deleted: ${pollDeletionResult.deletedCount}`);
+        console.log(`Votes deleted: ${voteDeletionResult.deletedCount}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'All poll and vote data has been successfully reset.',
+            deletedPolls: pollDeletionResult.deletedCount,
+            deletedVotes: voteDeletionResult.deletedCount
+        });
+
+    } catch (error) {
+        console.error('Error resetting data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'An error occurred while resetting data.',
             error: error.message
         });
     }

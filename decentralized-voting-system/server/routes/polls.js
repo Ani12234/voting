@@ -147,18 +147,18 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
 router.post('/:pollId/vote', [auth.authenticate, auth.isVoter, auth.isApprovedVoter], async (req, res) => {
     try {
         const pollId = req.params.pollId;
-        const voterId = req.user.id;
+        const voterId = req.user.id; // Use the user ID from the token
         const { optionText } = req.body;
+
+        // Check if the voter has already voted on this poll
+        const existingVote = await Vote.findOne({ poll: pollId, voter: voterId });
+        if (existingVote) {
+            return res.status(409).json({ message: 'You have already voted on this poll.' });
+        }
 
         const poll = await Poll.findById(pollId);
         if (!poll) {
             return res.status(404).json({ message: 'Poll not found' });
-        }
-
-        const voter = await Voter.findById(voterId);
-        // Check if voter has already voted in this poll
-        if (voter.votedPolls.includes(pollId)) {
-            return res.status(403).json({ message: 'You have already voted in this poll.' });
         }
 
         const optionToUpdate = poll.options.find(opt => opt.text === optionText);
@@ -166,29 +166,23 @@ router.post('/:pollId/vote', [auth.authenticate, auth.isVoter, auth.isApprovedVo
             return res.status(400).json({ message: 'Invalid option selected.' });
         }
 
-        // Create a new vote record
+        // Create a new vote record for each vote
         const newVote = new Vote({
             poll: pollId,
             voter: voterId,
             optionText: optionToUpdate.text
         });
 
-        // Use a transaction to ensure atomicity if using a replica set
+        // Increment the vote count for the option
         optionToUpdate.votes += 1;
-        voter.votedPolls.push(pollId);
 
         await poll.save();
-        await voter.save();
         await newVote.save();
 
         // Return the new vote object, which contains the unique ID for the receipt
         res.status(201).json(newVote);
 
     } catch (error) {
-        // Handle unique index constraint error for voting twice
-        if (error.code === 11000) {
-            return res.status(403).json({ message: 'Concurrency error: You have already voted in this poll.' });
-        }
         console.error('Vote submission error:', error);
         res.status(500).json({ message: 'Server error during vote submission.' });
     }

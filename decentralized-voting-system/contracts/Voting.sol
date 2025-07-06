@@ -17,7 +17,8 @@ contract Voting {
     }
     
     Poll[] public polls;
-    mapping(address => mapping(uint256 => bool)) public hasVotedInPoll;
+    // The mapping to track if a voter has voted in a poll has been removed to allow multiple votes.
+    // mapping(address => mapping(uint256 => bool)) public hasVotedInPoll;
     
     event PollCreated(uint256 indexed pollId, string title, uint256 endTime);
     event VoteCast(uint256 indexed pollId, uint256 optionIndex, address voter);
@@ -68,12 +69,14 @@ contract Voting {
         require(_pollId < polls.length, "Invalid poll ID");
         require(_optionIndex < polls[_pollId].options.length, "Invalid option index");
         require(block.timestamp <= polls[_pollId].endTime, "Poll has ended");
-        require(!hasVotedInPoll[msg.sender][_pollId], "Already voted in this poll");
-        require(!voterRegistry.hasAlreadyVoted(msg.sender), "Voter has already voted");
+        // The following checks have been removed to allow a user to vote multiple times.
+        // require(!hasVotedInPoll[msg.sender][_pollId], "Already voted in this poll");
+        // require(!voterRegistry.hasAlreadyVoted(msg.sender), "Voter has already voted");
         
         polls[_pollId].votes[_optionIndex]++;
-        hasVotedInPoll[msg.sender][_pollId] = true;
-        voterRegistry.markAsVoted(msg.sender);
+        // The following lines that mark a voter as 'voted' have been removed.
+        // hasVotedInPoll[msg.sender][_pollId] = true;
+        // voterRegistry.markAsVoted(msg.sender);
         
         emit VoteCast(_pollId, _optionIndex, msg.sender);
     }

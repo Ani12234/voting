@@ -27,6 +27,7 @@ const Layout = () => {
             {account && (
               <>
                 <NavLink to="/polls" className={({ isActive }) => `text-gray-600 hover:text-blue-500 ${isActive ? 'text-blue-500' : ''}`}>Polls</NavLink>
+                <NavLink to="/history" className={({ isActive }) => `text-gray-600 hover:text-blue-500 ${isActive ? 'text-blue-500' : ''}`}>My Votes</NavLink>
                 <NavLink to="/results" className={({ isActive }) => `text-gray-600 hover:text-blue-500 ${isActive ? 'text-blue-500' : ''}`}>Results</NavLink>
                 {isAdmin && (
                   <NavLink to="/admin/dashboard" className={({ isActive }) => `text-gray-600 hover:text-blue-500 ${isActive ? 'text-blue-500' : ''}`}>Admin</NavLink>

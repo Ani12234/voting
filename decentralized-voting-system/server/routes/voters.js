@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const config = require('config');
 const Voter = require('../models/Voter');
+const Vote = require('../models/Vote');
 const auth = require('../middleware/auth');
 const { ethers } = require('ethers');
 
@@ -354,6 +355,21 @@ router.get('/debug/:walletAddress', auth.authenticate, auth.isAdmin, async (req,
     } catch (error) {
         console.error('Debug voter check error:', error);
         res.status(500).json({ message: 'Server error during debug check.' });
+    }
+});
+
+// Get the voting history for the logged-in voter
+router.get('/history', [auth.authenticate, auth.isVoter], async (req, res) => {
+    try {
+        const voterId = req.user.id;
+        const votes = await Vote.find({ voter: voterId })
+            .populate('poll', 'title description') // Populate poll details
+            .sort({ timestamp: -1 }); // Show latest votes first
+
+        res.json(votes);
+    } catch (error) {
+        console.error('Error fetching vote history:', error);
+        res.status(500).json({ message: 'Server error while fetching vote history.' });
     }
 });
 
