@@ -1,6 +1,10 @@
 # Decentralized Voting System
 
-![Decentralized Voting System Banner](https://www.google.com/url?sa=i&url=https%3A%2F%2Fpixelplex.io%2Fblog%2Fblockchain-voting%2F&psig=AOvVaw3R-5J1weU2x7rPHFiy9y8H&ust=1751911411751000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCNC_zN3oqI4DFQAAAAAdAAAAABAE)
+<div align="center">
+  <h1>Decentralized Voting System</h1>
+  <p>Secure • Transparent • Immutable</p>
+  <hr/>
+</div>
 
 
 ## Overview
