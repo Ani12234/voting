@@ -1,24 +1,34 @@
 require('dotenv').config();
 const { ethers } = require('ethers');
-const config = require('config');
 const voterRegistryArtifact = require('../artifacts/contracts/VoterRegistry.sol/VoterRegistry.json');
 
-// Get config variables
-const SEPOLIA_RPC_URL = config.get('sepoliaRpcUrl');
-const VOTER_REGISTRY_ADDRESS = config.get('voterRegistryAddress');
+// Check for required environment variables
+const requiredEnvVars = ['INFURA_URL', 'VOTER_REGISTRY_ADDRESS'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars.join(', '));
+    console.error('Please add them to your .env file');
+    process.exit(1);
+}
+
+// Get environment variables
+const INFURA_URL = process.env.INFURA_URL;
+const VOTER_REGISTRY_ADDRESS = process.env.VOTER_REGISTRY_ADDRESS;
 
 async function checkContract() {
-  if (!SEPOLIA_RPC_URL || !VOTER_REGISTRY_ADDRESS) {
-    console.error('Error: Please make sure SEPOLIA_RPC_URL and VOTER_REGISTRY_ADDRESS are set in your environment and mapped in config/custom-environment-variables.json.');
+  console.log('--- Contract Connection Test ---');
+  console.log('Using RPC URL:', INFURA_URL);
+  console.log('Using Contract Address:', VOTER_REGISTRY_ADDRESS);
+  
+  // Validate contract address format
+  if (!ethers.isAddress(VOTER_REGISTRY_ADDRESS)) {
+    console.error('❌ Invalid contract address format');
     return;
   }
 
-  console.log('--- Contract Connection Test ---');
-  console.log('Using RPC URL:', SEPOLIA_RPC_URL);
-  console.log('Using Contract Address:', VOTER_REGISTRY_ADDRESS);
-
   try {
-    const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+    const provider = new ethers.providers.JsonRpcProvider(INFURA_URL);
     
     console.log('\n1. Checking network connection...');
     const network = await provider.getNetwork();

@@ -1,7 +1,13 @@
 const jwt = require('jsonwebtoken');
-const config = require('config');
+require('dotenv').config();
 const Admin = require('../models/Admin');
 const Voter = require('../models/Voter');
+
+// Check for required environment variables
+if (!process.env.JWT_SECRET) {
+    console.error('❌ JWT_SECRET is not defined in environment variables');
+    process.exit(1);
+}
 
 const auth = {};
 
@@ -19,8 +25,7 @@ auth.authenticate = async (req, res, next) => {
         }
 
         // Verify the token
-        const secret = config.get('jwtSecret');
-        const decoded = jwt.verify(token, secret);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Standardize the payload to handle both { user: { id, role } } and { id, role } structures
         const payload = decoded.user && decoded.user.id ? decoded.user : decoded;

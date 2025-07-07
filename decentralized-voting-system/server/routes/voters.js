@@ -2,11 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
-const config = require('config');
+require('dotenv').config();
 const Voter = require('../models/Voter');
 const Vote = require('../models/Vote');
 const auth = require('../middleware/auth');
 const { ethers } = require('ethers');
+
+// Check for required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'VOTER_REGISTRY_ADDRESS', 'INFURA_URL', 'PRIVATE_KEY'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars.join(', '));
+    process.exit(1);
+}
 
 // ABI for the VoterRegistry contract
 const VoterRegistryABI = [
@@ -275,16 +284,16 @@ router.put(
             // If status is 'approved', register on-chain first
             if (status === 'approved') {
                 try {
-                    const provider = new ethers.JsonRpcProvider(config.get('sepoliaRpcUrl'));
-                    const adminWallet = new ethers.Wallet(config.get('adminPrivateKey'), provider);
-                    const voterRegistryContract = new ethers.Contract(
-                        config.get('voterRegistryAddress'),
+                    const provider = new ethers.providers.JsonRpcProvider(process.env.INFURA_URL);
+                    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+                    const contract = new ethers.Contract(
+                        process.env.VOTER_REGISTRY_ADDRESS,
                         VoterRegistryABI,
-                        adminWallet
+                        wallet
                     );
 
                     // Check if the voter is already registered on-chain before attempting to register
-                    const isAlreadyRegistered = await voterRegistryContract.isRegistered(voter.walletAddress);
+                    const isAlreadyRegistered = await contract.isRegistered(voter.walletAddress);
 
                     if (isAlreadyRegistered) {
                         console.log(`[INFO] Voter ${voter.walletAddress} is already registered on-chain. Skipping blockchain transaction.`);

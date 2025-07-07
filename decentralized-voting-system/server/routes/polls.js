@@ -49,8 +49,17 @@ router.get('/', async (req, res) => {
 });
 
 // Create a new poll (admin only)
-const config = require('config');
+require('dotenv').config();
 const { VotingABI } = require('../utils/contracts');
+
+// Check for required environment variables
+const requiredEnvVars = ['VOTING_CONTRACT_ADDRESS', 'INFURA_URL', 'PRIVATE_KEY'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars.join(', '));
+    process.exit(1);
+}
 
 router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
     const { title, description, options, duration } = req.body;
@@ -61,17 +70,13 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
 
     try {
         // Step 1: Connect to the blockchain and get the admin signer
-        const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
-        const adminWallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
-        const votingContractAddress = process.env.VOTING_CONTRACT_ADDRESS;
-        
-        // Validate and format the contract address
-        if (!ethers.isAddress(votingContractAddress)) {
-            throw new Error('Invalid contract address format');
-        }
-        const formattedAddress = ethers.getAddress(votingContractAddress);
-        
-        const votingContract = new ethers.Contract(formattedAddress, votingContractArtifact.abi, adminWallet);
+        const provider = new ethers.providers.JsonRpcProvider(process.env.INFURA_URL);
+        const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+        const contract = new ethers.Contract(
+            process.env.VOTING_CONTRACT_ADDRESS,
+            VotingABI,
+            wallet
+        );
 
         const durationInMinutes = parseInt(duration, 10);
         if (isNaN(durationInMinutes) || durationInMinutes <= 0) {
