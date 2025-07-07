@@ -41,7 +41,9 @@ const auth = (req, res, next) => {
 
 // Connect to Database
 connectDB();
-
+app.get("/", (req, res) => {
+    res.json("hello");
+  });
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/voters', require('./routes/voters'));
