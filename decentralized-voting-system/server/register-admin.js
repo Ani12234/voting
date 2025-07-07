@@ -2,15 +2,21 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Admin = require('./models/Admin');
 
-// --- IMPORTANT --- 
-// Replace these placeholders with your desired admin credentials before running the script.
-const ADMIN_WALLET_ADDRESS = '0x3471336301Fb210c486BFA5C7e2800249409d0b2';
-const ADMIN_PASSWORD = 'Anirudh#455';
-// -----------------
+// Load environment variables
+require('dotenv').config();
+
+// Get admin credentials from environment variables
+const ADMIN_WALLET_ADDRESS = process.env.ADMIN_WALLET_ADDRESS;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 const registerAdmin = async () => {
-  if (ADMIN_WALLET_ADDRESS === 'YOUR_ETHEREUM_WALLET_ADDRESS' || ADMIN_PASSWORD === 'YOUR_SECURE_PASSWORD') {
-    console.error('ERROR: Please replace the placeholder credentials in the register-admin.js file before running.');
+  // Validate required environment variables
+  const requiredEnvVars = ['MONGODB_URI', 'ADMIN_WALLET_ADDRESS', 'ADMIN_PASSWORD'];
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars.join(', '));
+    console.error('Please set these variables in your .env file');
     process.exit(1);
   }
 
@@ -21,9 +27,15 @@ const registerAdmin = async () => {
   }
 
   try {
-    console.log('Connecting to MongoDB...');
-    await mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
-    console.log('MongoDB connected.');
+    console.log('🔌 Connecting to MongoDB...');
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 60000,
+      family: 4,
+      retryWrites: true,
+      w: 'majority'
+    });
+    console.log('✅ MongoDB Connected Successfully');
 
     const existingAdmin = await Admin.findOne({ walletAddress: ADMIN_WALLET_ADDRESS.toLowerCase() });
     if (existingAdmin) {

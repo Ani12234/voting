@@ -6,8 +6,17 @@ const { body, validationResult } = require('express-validator');
 const { ethers } = require('ethers');
 const Voter = require('../models/Voter');
 const Admin = require('../models/Admin');
-const config = require('config');
+require('dotenv').config();
 const VoterRegistry = require('../../artifacts/contracts/VoterRegistry.sol/VoterRegistry.json');
+
+// Check for required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'VOTER_REGISTRY_ADDRESS'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars.join(', '));
+    process.exit(1);
+}
 
 // Input validation middleware
 const validateLogin = [
@@ -83,11 +92,8 @@ router.post('/login', validateLogin, async (req, res) => {
 
         // Generate JWT token
         const token = jwt.sign(
-            { 
-                id: admin._id,
-                role: 'admin'
-            },
-            config.get('jwtSecret'),
+            { userId: admin._id, walletAddress: admin.walletAddress },
+            process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
 
@@ -174,7 +180,7 @@ router.post('/voter/login', [
     try {
         console.log(`[LOGIN ATTEMPT] Wallet: ${walletAddress}`);
 
-                                const voter = await Voter.findOne({ 
+        const voter = await Voter.findOne({ 
             walletAddress: { $regex: new RegExp('^' + walletAddress + '$', 'i') } 
         });
 
@@ -190,10 +196,15 @@ router.post('/voter/login', [
         }
 
         console.log('[LOGIN] Checking on-chain registration...');
-        const provider = new ethers.JsonRpcProvider(config.get('sepoliaRpcUrl'));
-        const voterRegistry = new ethers.Contract(config.get('voterRegistryAddress'), VoterRegistry.abi, provider);
+        const provider = new ethers.providers.JsonRpcProvider(process.env.INFURA_URL);
+        const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+        const contract = new ethers.Contract(
+            process.env.VOTER_REGISTRY_ADDRESS,
+            VoterRegistry.abi,
+            wallet
+        );
 
-        const isRegistered = await voterRegistry.isRegistered(walletAddress);
+        const isRegistered = await contract.isRegistered(walletAddress);
         console.log(`[LOGIN] On-chain registration status: ${isRegistered}`);
 
         if (!isRegistered) {
