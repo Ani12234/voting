@@ -12,13 +12,15 @@ const connectDB = async () => {
         console.log('🔌 Connecting to MongoDB...');
         
         const options = {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             serverSelectionTimeoutMS: 10000,
             socketTimeoutMS: 60000,
             family: 4,
             retryWrites: true,
-            w: 'majority'
+            w: 'majority',
+            maxPoolSize: 10,  // Maximum number of connections in the connection pool
+            minPoolSize: 1,   // Minimum number of connections in the connection pool
+            maxIdleTimeMS: 30000, // How long a connection can be idle before being removed
+            connectTimeoutMS: 10000 // How long to wait for connection to establish
         };
         
         await mongoose.connect(uri, options);
