@@ -90,9 +90,9 @@ router.post('/login', validateLogin, async (req, res) => {
         admin.lastLogin = new Date();
         await admin.save();
 
-        // Generate JWT token
+        // Generate JWT token with correct payload format
         const token = jwt.sign(
-            { userId: admin._id, walletAddress: admin.walletAddress },
+            { id: admin._id, role: 'admin' },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );

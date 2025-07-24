@@ -156,35 +156,22 @@ router.post('/login', [
         }
 
         if (voter.status === 'approved') {
-            const payload = {
-                user: {
-                    id: voter.id,
-                    role: 'voter'
-                }
-            };
-
-            const secret = config.get('jwtSecret');
-            console.log('[DEBUG] Signing token with secret:', secret);
-            jwt.sign(
-                payload,
-                secret,
-                { expiresIn: '5h' },
-                (err, token) => {
-                    if (err) throw err;
-                    res.status(200).json({
-                        success: true,
-                        message: 'Login successful.',
-                        token,
-                        voter: {
-                            id: voter._id,
-                            name: voter.name,
-                            email: voter.email,
-                            walletAddress: voter.walletAddress,
-                            hasVoted: voter.hasVoted,
-                        }
-                    });
-                }
+            const token = jwt.sign(
+                { id: voter._id, role: 'voter' }, 
+                process.env.JWT_SECRET, 
+                { expiresIn: '24h' }
             );
+
+            res.json({
+                success: true,
+                token,
+                voter: {
+                    id: voter.id,
+                    walletAddress: voter.walletAddress,
+                    name: voter.name,
+                    status: voter.status
+                }
+            });
         } else {
              // Should not happen, but as a fallback
              return res.status(403).json({ 
