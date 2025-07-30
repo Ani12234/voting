@@ -10,7 +10,7 @@ require('dotenv').config();
 const VoterRegistry = require('../../artifacts/contracts/VoterRegistry.sol/VoterRegistry.json');
 
 // Check for required environment variables
-const requiredEnvVars = ['JWT_SECRET', 'VOTER_REGISTRY_ADDRESS'];
+const requiredEnvVars = ['JWT_SECRET', 'VOTER_REGISTRY_ADDRESS', 'INFURA_URL', 'PRIVATE_KEY'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0) {
@@ -196,7 +196,7 @@ router.post('/voter/login', [
         }
 
         console.log('[LOGIN] Checking on-chain registration...');
-        const provider = new ethers.providers.JsonRpcProvider(process.env.INFURA_URL);
+                const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
         const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
         const contract = new ethers.Contract(
             process.env.VOTER_REGISTRY_ADDRESS,
@@ -220,7 +220,7 @@ router.post('/voter/login', [
 
         jwt.sign(
             payload,
-            config.get('jwtSecret'),
+            process.env.JWT_SECRET,
             { expiresIn: '5h' },
             (err, token) => {
                 if (err) {

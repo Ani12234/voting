@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 export const useAccount = () => {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState(false);
 
   const disconnect = useCallback(() => {
     localStorage.removeItem('account');
@@ -22,6 +23,10 @@ export const useAccount = () => {
       disconnect();
     } finally {
       setLoading(false);
+    }
+
+    if (typeof window.ethereum !== 'undefined') {
+      setIsMetaMaskInstalled(true);
     }
 
     const handleAccountsChanged = (accounts) => {
@@ -71,6 +76,7 @@ export const useAccount = () => {
     loading,
     login,
     disconnect,
-    setAccount
+    setAccount,
+    isMetaMaskInstalled
   };
 };

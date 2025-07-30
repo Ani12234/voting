@@ -7,7 +7,7 @@ import { useAccountContext } from '../context/AccountContext';
 
 const VoterLogin = () => {
   const navigate = useNavigate();
-  const { login } = useAccountContext();
+  const { login, isMetaMaskInstalled } = useAccountContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,9 +42,15 @@ const VoterLogin = () => {
               Connect your wallet to log in and cast your vote.
             </p>
 
+            {!isMetaMaskInstalled && (
+              <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded-md text-sm">
+                MetaMask is not installed. Please install it to continue.
+              </div>
+            )}
+
             {error && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md text-sm">{error}</div>}
 
-            <Button onClick={handleLogin} disabled={isLoading} className="w-full">
+            <Button onClick={handleLogin} disabled={isLoading || !isMetaMaskInstalled} className="w-full">
               {isLoading ? 'Logging In...' : 'Login with Wallet'}
             </Button>
           </div>
