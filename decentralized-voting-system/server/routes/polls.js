@@ -70,7 +70,7 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
 
     try {
         // Step 1: Connect to the blockchain and get the admin signer
-        const provider = new ethers.providers.JsonRpcProvider(process.env.INFURA_URL);
+        const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
         const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
         const contract = new ethers.Contract(
             process.env.VOTING_CONTRACT_ADDRESS,
@@ -88,7 +88,7 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
 
         // Step 2: Call the smart contract to create the poll on-chain
         console.log('Creating poll on-chain...');
-        const tx = await votingContract.createPoll(title, description, options, durationInSeconds);
+        const tx = await contract.createPoll(title, description, options, durationInSeconds);
         const receipt = await tx.wait(); // Wait for the transaction to be mined
         console.log(`Poll created on-chain. Transaction hash: ${receipt.hash}`);
 

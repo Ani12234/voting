@@ -271,7 +271,7 @@ router.put(
             // If status is 'approved', register on-chain first
             if (status === 'approved') {
                 try {
-                    const provider = new ethers.providers.JsonRpcProvider(process.env.INFURA_URL);
+                    const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
                     const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
                     const contract = new ethers.Contract(
                         process.env.VOTER_REGISTRY_ADDRESS,
@@ -294,15 +294,21 @@ router.put(
                 } catch (error) {
                     console.log('--- BLOCKCHAIN REGISTRATION FAILED ---');
                     console.error(`[ERROR] Failed to register voter ${voter.walletAddress} on-chain.`);
-                    console.error('[ERROR] Reason:', error.reason);
+                    // Log detailed error information from ethers.js
+                    console.error('[ERROR] Message:', error.message);
+                    console.error('[ERROR] Reason:', error.reason); 
                     console.error('[ERROR] Code:', error.code);
-                    console.error('[ERROR] Full error object:', JSON.stringify(error, null, 2));
+                    console.error('[ERROR] Transaction:', error.transactionHash);
+                    console.error('[ERROR] Stack Trace:', error.stack);
                     console.log('--------------------------------------');
                     
                     return res.status(500).json({
                         success: false,
                         message: 'Failed to register voter on the blockchain.',
-                        error: error.message || 'Unknown error'
+                        error: {
+                            reason: error.reason || 'An unknown error occurred.',
+                            code: error.code
+                        }
                     });
                 }
             }
