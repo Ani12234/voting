@@ -190,7 +190,10 @@ const AdminDashboard = () => {
     try {
       const token = getAuthToken();
       if (!token) return;
-      const pollData = { ...newPoll, duration: parseInt(newPoll.duration, 10) };
+            const pollData = { 
+        ...newPoll, 
+        duration: newPoll.duration === 'infinite' ? 'infinite' : parseInt(newPoll.duration, 10) 
+      };
       await axios.post(`${API_BASE_URL}/api/polls`, pollData, { headers: { Authorization: `Bearer ${token}` } });
       toast.success('Poll created successfully!');
       setNewPoll({ title: '', description: '', options: ['', ''], duration: '60' });
@@ -337,7 +340,22 @@ const AdminDashboard = () => {
               </div>
               <Button type="button" variant="secondary" onClick={addOption} className="mt-4"><FaPlus className="mr-2" />Add Option</Button>
             </div>
-            <Input label="Duration (in minutes)" name="duration" type="number" value={newPoll.duration} onChange={handleInputChange} min="1" required />
+                        <div>
+              <label htmlFor="duration" className="block text-sm font-medium text-gray-700">Duration</label>
+              <select 
+                id="duration" 
+                name="duration" 
+                value={newPoll.duration} 
+                onChange={handleInputChange} 
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              >
+                <option value="5">5 Minutes</option>
+                <option value="30">30 Minutes</option>
+                <option value="60">1 Hour</option>
+                <option value="1440">1 Day</option>
+                <option value="infinite">Infinite</option>
+              </select>
+            </div>
             <Button type="submit" disabled={isLoading} className="w-full">{isLoading ? 'Creating...' : 'Create Poll'}</Button>
           </form>
         </Card>

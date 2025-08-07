@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
         const pollsWithOnChainData = await Promise.all(pollsFromDB.map(async (poll) => {
             const pollObject = poll.toObject();
             const now = new Date();
-            pollObject.status = now > poll.endTime ? 'Closed' : 'Active';
+            pollObject.status = poll.endTime && now > poll.endTime ? 'Closed' : 'Active';
 
             if (pollObject.blockchainId !== undefined && pollObject.blockchainId !== null) {
                 try {
@@ -78,12 +78,24 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
             wallet
         );
 
-        const durationInMinutes = parseInt(duration, 10);
-        if (isNaN(durationInMinutes) || durationInMinutes <= 0) {
-            return res.status(400).json({ message: 'Invalid duration.' });
+        let durationInSeconds;
+        let endTime;
+        let durationInMinutes;
+
+        if (duration === 'infinite') {
+            durationInSeconds = 2**64 - 1; // A very large number for 'infinite' on-chain
+            endTime = null; // Represents infinite duration in the database
+            durationInMinutes = null;
+        } else {
+            durationInMinutes = parseInt(duration, 10);
+            if (isNaN(durationInMinutes) || durationInMinutes <= 0) {
+                return res.status(400).json({ message: 'Invalid duration.' });
+            }
+            durationInSeconds = durationInMinutes * 60;
+            endTime = new Date(Date.now() + durationInSeconds * 1000);
         }
 
-        const durationInSeconds = durationInMinutes * 60;
+
         console.log(`Creating poll with duration: ${durationInMinutes} minutes (${durationInSeconds} seconds)`); // Debugging log
 
         // Step 2: Call the smart contract to create the poll on-chain
@@ -93,7 +105,6 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
         console.log(`Poll created on-chain. Transaction hash: ${receipt.hash}`);
 
         // Step 3: Save the poll to the database after on-chain success
-        const endTime = new Date(Date.now() + durationInSeconds * 1000);
         console.log(`Poll end time (database): ${endTime}`); // Debugging log
         // Get the poll ID from the transaction receipt
         // The events array might not be populated depending on the ethers version and provider.
