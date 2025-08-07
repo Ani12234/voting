@@ -271,6 +271,7 @@ router.put(
             // If status is 'approved', register on-chain first
             if (status === 'approved') {
                 try {
+                    console.log('Initializing blockchain connection...');
                     const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
                     const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
                     const contract = new ethers.Contract(
@@ -279,15 +280,17 @@ router.put(
                         wallet
                     );
 
-                    // Check if the voter is already registered on-chain before attempting to register
+                    console.log('Checking if voter is already registered on-chain...');
                     const isAlreadyRegistered = await contract.isRegistered(voter.walletAddress);
 
                     if (isAlreadyRegistered) {
-                        console.log(`[INFO] Voter ${voter.walletAddress} is already registered on-chain. Skipping blockchain transaction.`);
+                        console.log(`[INFO] Voter ${voter.walletAddress} is already registered on-chain.`);
                     } else {
                         console.log(`[INFO] Registering voter ${voter.walletAddress} on-chain...`);
-                        const tx = await voterRegistryContract.registerVoter(voter.walletAddress);
-                        await tx.wait();
+                        const tx = await contract.registerVoter(voter.walletAddress);
+                        console.log(`Transaction sent. Waiting for confirmation...`);
+                        const receipt = await tx.wait();
+                        console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
                         console.log(`Voter ${voter.walletAddress} registered on-chain successfully. Tx: ${tx.hash}`);
                     }
 
@@ -313,22 +316,62 @@ router.put(
                 }
             }
 
-            // This block now correctly updates the database only after all checks and transactions have passed.
-            voter.status = status;
-            voter.statusReason = status === 'approved' 
-                ? 'Registration approved by admin.' 
-                : 'Registration rejected by admin.';
-            voter.lastUpdated = Date.now();
-            await voter.save();
+            // Update the voter status in the database
+            try {
+                voter.status = status;
+                voter.statusReason = status === 'approved' 
+                    ? 'Registration approved by admin.' 
+                    : 'Registration rejected by admin.';
+                voter.lastUpdated = Date.now();
+                await voter.save();
 
-            res.json({
-                success: true,
-                message: `Voter status updated to ${status}.`,
-                voter,
-            });
+                console.log(`Successfully updated voter ${voter._id} status to ${status}`);
+                
+                res.json({
+                    success: true,
+                    message: `Voter status updated to ${status}.`,
+                    voter: {
+                        _id: voter._id,
+                        walletAddress: voter.walletAddress,
+                        name: voter.name,
+                        status: voter.status,
+                        lastUpdated: voter.lastUpdated
+                    },
+                });
+            } catch (dbError) {
+                console.error('Error updating voter in database:', dbError);
+                // Even if database update fails, we've already made the blockchain changes
+                // So we'll return a success response but note the database issue
+                res.status(202).json({
+                    success: true,
+                    message: `Voter was registered on blockchain but there was an issue updating the database.`,
+                    warning: 'Database update may not be reflected',
+                    voter: {
+                        walletAddress: voter.walletAddress,
+                        status: 'approved' // Since blockchain succeeded
+                    }
+                });
+            }
         } catch (error) {
             console.error('Error updating voter status:', error);
-            res.status(500).json({ message: 'Server error' });
+            
+            // More detailed error response
+            const errorResponse = {
+                success: false,
+                message: 'Failed to update voter status',
+                error: error.message || 'Unknown error',
+                code: error.code,
+                reason: error.reason,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            };
+            
+            // If it's a blockchain error, add more context
+            if (error.transactionHash) {
+                errorResponse.transactionHash = error.transactionHash;
+                errorResponse.message = 'Blockchain transaction failed';
+            }
+            
+            res.status(500).json(errorResponse);
         }
     }
 );

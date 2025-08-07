@@ -20,28 +20,53 @@ const jwt = require('jsonwebtoken');
 const app = express();
 
 // Middleware
+// CORS Configuration
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://voting-three-self.vercel.app',
-  'https://*.vercel.app/*',
+  'https://voting-three-self.vercel.app/*',
+  'https://voting-three-self.vercel.app/',
+  'https://voting-three-self.vercel.app/*',
+  'https://voting-three-self.vercel.app/*/*',
+  'https://voting-three-self.vercel.app/*/*/*',
+  'https://voting-frontend-*.vercel.app',
+  'https://voting-frontend-*.vercel.app/*',
+  'https://voting-frontend-*.vercel.app/*/*',
+  'https://voting-frontend-*.vercel.app/*/*/*',
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || allowedOrigins.some(allowedOrigin => origin.startsWith(allowedOrigin))) {
+    
+    // Check if the origin is in the allowed origins
+    if (
+      allowedOrigins.includes(origin) || 
+      allowedOrigins.some(allowedOrigin => 
+        origin === allowedOrigin || 
+        origin.startsWith(allowedOrigin.replace('*', ''))
+      )
+    ) {
       callback(null, true);
     } else {
+      console.log('CORS blocked for origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token']
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'x-requested-with'],
+  exposedHeaders: ['x-auth-token']
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Handle preflight requests
