@@ -82,12 +82,7 @@ const VoterLogin = () => {
               {isLoading ? 'Connecting...' : 'Connect MetaMask & Login'}
             </button>
           </div>
-          <p className="mt-6 text-center text-sm text-gray-400">
-            Not registered yet?{' '}
-            <button onClick={() => navigate('/register')} className="text-[#1383eb] hover:underline">
-              Register here
-            </button>
-          </p>
+          {/* Registration removed: OTP login handles registration implicitly */}
         </div>
       </div>
     </div>

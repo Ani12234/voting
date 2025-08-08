@@ -53,9 +53,6 @@ const Layout = () => {
                 <button onClick={() => navigate('/login')} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium">
                   Login
                 </button>
-                <button onClick={() => navigate('/register')} className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm font-medium">
-                  Register
-                </button>
               </>
             )}
           </div>

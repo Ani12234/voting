@@ -15,7 +15,8 @@ const pollSchema = new mongoose.Schema({
     }],
     duration: {
         type: Number,
-        required: true
+        required: false,
+        default: null
     },
     blockchainId: {
         type: Number,
@@ -27,7 +28,8 @@ const pollSchema = new mongoose.Schema({
     },
     endTime: {
         type: Date,
-        required: true
+        required: false,
+        default: null
     }
 });
 

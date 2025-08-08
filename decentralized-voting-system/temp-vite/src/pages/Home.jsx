@@ -16,11 +16,11 @@ const Home = () => {
         Voter Login
       </Button>
       <Button 
-        onClick={() => navigate('/register')} 
+        onClick={() => navigate('/demo/aadhaar')} 
         variant="outline"
         className="w-full sm:w-auto px-10 py-4 text-lg"
       >
-        New Voter? Register Here
+        Demo: Add Aadhaar+Email
       </Button>
     </div>
   );
@@ -61,7 +61,7 @@ const Home = () => {
             Ready to Make Your Voice Heard?
           </h2>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Join the revolution of decentralized democracy. Register to get started or view the current polls.
+            Join the revolution of decentralized democracy. Login to get started or view the current polls.
           </p>
           <Button onClick={() => navigate('/results')} variant="secondary">
             View Live Results

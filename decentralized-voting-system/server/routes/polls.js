@@ -3,7 +3,9 @@ const router = express.Router();
 const Poll = require('../models/Poll');
 const Voter = require('../models/Voter');
 const Vote = require('../models/Vote'); // Import the new Vote model
-const votingContractArtifact = require('../../artifacts/contracts/Voting.sol/Voting.json');
+// Import the contract ABI
+const VotingArtifact = require('../../artifacts/contracts/Voting.sol/Voting.json');
+const VotingABI = VotingArtifact.abi;
 const auth = require('../middleware/auth'); // Import auth middleware
 const { ethers } = require('ethers');
 
@@ -12,9 +14,9 @@ router.get('/', async (req, res) => {
     try {
         const pollsFromDB = await Poll.find().sort({ createdAt: -1 });
 
-        const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
+        const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
         const votingContractAddress = process.env.VOTING_CONTRACT_ADDRESS;
-        const votingContract = new ethers.Contract(votingContractAddress, votingContractArtifact.abi, provider);
+        const votingContract = new ethers.Contract(votingContractAddress, VotingABI, provider);
 
         const pollsWithOnChainData = await Promise.all(pollsFromDB.map(async (poll) => {
             const pollObject = poll.toObject();
@@ -50,10 +52,9 @@ router.get('/', async (req, res) => {
 
 // Create a new poll (admin only)
 require('dotenv').config();
-const { VotingABI } = require('../utils/contracts');
 
 // Check for required environment variables
-const requiredEnvVars = ['VOTING_CONTRACT_ADDRESS', 'INFURA_URL', 'PRIVATE_KEY'];
+const requiredEnvVars = ['VOTING_CONTRACT_ADDRESS', 'INFURA_URL', 'ADMIN_PRIVATE_KEY'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0) {
@@ -71,28 +72,46 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
     try {
         // Step 1: Connect to the blockchain and get the admin signer
         const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
-        const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+        const wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
         const contract = new ethers.Contract(
             process.env.VOTING_CONTRACT_ADDRESS,
             VotingABI,
             wallet
         );
 
+        console.log('Received duration:', duration);
+        
         let durationInSeconds;
         let endTime;
         let durationInMinutes;
 
         if (duration === 'infinite') {
-            durationInSeconds = 2**64 - 1; // A very large number for 'infinite' on-chain
+            // Use a large but safe number for 'infinite' duration (100 years in seconds)
+            durationInSeconds = (60 * 60 * 24 * 365 * 100).toString();
             endTime = null; // Represents infinite duration in the database
             durationInMinutes = null;
         } else {
+            // Convert minutes to seconds for the blockchain
             durationInMinutes = parseInt(duration, 10);
             if (isNaN(durationInMinutes) || durationInMinutes <= 0) {
-                return res.status(400).json({ message: 'Invalid duration.' });
+                return res.status(400).json({ message: 'Invalid duration provided. Must be a positive number or "infinite".' });
             }
-            durationInSeconds = durationInMinutes * 60;
-            endTime = new Date(Date.now() + durationInSeconds * 1000);
+            // Validate maximum duration (e.g., 1 year)
+            const MAX_DURATION_MINUTES = 60 * 24 * 365; // 1 year in minutes
+            if (durationInMinutes > MAX_DURATION_MINUTES) {
+                return res.status(400).json({ 
+                    message: `Duration too long. Maximum allowed is ${MAX_DURATION_MINUTES} minutes (1 year).` 
+                });
+            }
+            durationInSeconds = (durationInMinutes * 60).toString();
+            endTime = new Date(Date.now() + durationInMinutes * 60 * 1000);
+        }
+
+        // Ensure the value is within safe integer range for JavaScript
+        if (durationInSeconds && !Number.isSafeInteger(Number(durationInSeconds))) {
+            return res.status(400).json({ 
+                message: 'Duration results in a number that is too large.' 
+            });
         }
 
 
@@ -100,18 +119,120 @@ router.post('/', [auth.authenticate, auth.isAdmin], async (req, res) => {
 
         // Step 2: Call the smart contract to create the poll on-chain
         console.log('Creating poll on-chain...');
-        const tx = await contract.createPoll(title, description, options, durationInSeconds);
-        const receipt = await tx.wait(); // Wait for the transaction to be mined
-        console.log(`Poll created on-chain. Transaction hash: ${receipt.hash}`);
+        console.log(`Title: ${title}, Description: ${description}, Options: ${options}, Duration: ${durationInSeconds} seconds`);
+        
+        // Initialize contract with admin wallet
+        console.log('Initializing contract with INFURA_URL:', process.env.INFURA_URL);
+        console.log('Using VOTING_CONTRACT_ADDRESS:', process.env.VOTING_CONTRACT_ADDRESS);
+        
+        try {
+            // In ethers v6, we can directly use ethers.JsonRpcProvider
+            const pollProvider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
+            const pollWallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, pollProvider);
+            const pollContract = new ethers.Contract(
+                process.env.VOTING_CONTRACT_ADDRESS,
+                VotingABI,
+                pollWallet
+            );
+            
+            console.log('Successfully connected to contract. Using admin wallet:', process.env.ADMIN_WALLET_ADDRESS);
+            
+            // In ethers v6, we can directly use ethers.toBigInt for large numbers
+            console.log('Converting duration to BigInt. Input:', durationInSeconds);
+            const durationBigInt = ethers.toBigInt(durationInSeconds);
+            console.log('Successfully converted to BigInt:', durationBigInt.toString());
+            
+            console.log('Sending transaction to create poll...');
+            
+            // Log the exact parameters being sent to the contract
+            console.log('Function parameters:', {
+                title,
+                description,
+                options,
+                duration: durationBigInt.toString()
+            });
+            
+            // Get the contract interface to check the function signature
+            const contractInterface = new ethers.Interface(VotingABI);
+            const functionFragment = contractInterface.getFunction('createPoll');
+            console.log('Function signature:', functionFragment.format('sighash'));
+            
+            try {
+                // Try with a higher gas limit and explicit gas price
+                const tx = await pollContract.createPoll(
+                    title,
+                    description,
+                    options,
+                    durationBigInt,
+                    {
+                        gasLimit: 2000000, // Increased gas limit
+                        gasPrice: await pollProvider.getFeeData().then(feeData => feeData.gasPrice * 2n) // Higher gas price
+                    }
+                );
+                
+                console.log('Transaction sent. Hash:', tx.hash);
+                console.log('Waiting for transaction confirmation...');
+                
+                const receipt = await tx.wait();
+                // Make receipt available after this block
+                var pollReceipt = receipt;
+                
+                if (receipt.status === 0) {
+                    throw new Error('Transaction reverted');
+                }
+                
+                console.log('Transaction confirmed in block:', receipt.blockNumber);
+                // In ethers v6, the transaction hash on the receipt is `hash`
+                console.log('Poll created on-chain. Transaction hash:', receipt.hash);
+                
+                // Do not return here; continue to process logs and persist to DB
+                // return receipt;
+            } catch (txError) {
+                console.error('Transaction error details:', {
+                    code: txError.code,
+                    reason: txError.reason,
+                    data: txError.data,
+                    transaction: txError.transaction,
+                    receipt: txError.receipt,
+                    stack: txError.stack
+                });
+                
+                // Try to decode the revert reason if available
+                if (txError.data) {
+                    try {
+                        const revertReason = contractInterface.parseError(txError.data);
+                        console.error('Revert reason:', revertReason);
+                    } catch (decodeError) {
+                        console.error('Could not decode revert reason:', decodeError);
+                    }
+                }
+                
+                throw txError;
+            }
+        } catch (error) {
+            console.error('Detailed error creating poll on-chain:', {
+                message: error.message,
+                code: error.code,
+                reason: error.reason,
+                data: error.data,
+                stack: error.stack
+            });
+            throw error; // This will be caught by the outer try-catch
+        }
 
         // Step 3: Save the poll to the database after on-chain success
         console.log(`Poll end time (database): ${endTime}`); // Debugging log
         // Get the poll ID from the transaction receipt
         // The events array might not be populated depending on the ethers version and provider.
         // A more robust way is to parse the logs manually.
-        const event = receipt.logs.map(log => {
+        // Ensure we have the receipt from the transaction above
+        if (!pollReceipt) {
+            throw new Error('Missing transaction receipt for event parsing');
+        }
+        const parseInterface = new ethers.Interface(VotingABI);
+        const event = pollReceipt.logs.map(log => {
             try {
-                return votingContract.interface.parseLog(log);
+                return parseInterface.parseLog(log);
             } catch (e) {
                 return null;
             }

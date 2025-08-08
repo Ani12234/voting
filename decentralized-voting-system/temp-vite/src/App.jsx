@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AnimatePresence } from 'framer-motion';
 import Layout from './components/Layout';
 import Home from './pages/Home';
-import VoterRegistration from './pages/VoterRegistration';
 import Polls from './pages/Polls';
 import AdminDashboard from './pages/AdminDashboard';
 import VoterDashboard from './pages/VoterDashboard';
@@ -11,6 +10,7 @@ import VoteHistory from './pages/VoteHistory'; // Import the new page
 import AdminLogin from './pages/AdminLogin';
 import VoterLogin from './pages/VoterLogin';
 import { AccountProvider, useAccountContext } from './context/AccountContext.jsx';
+import DemoAadhaarAdmin from './pages/DemoAadhaarAdmin';
 
 // PrivateRoute component now uses the context
 const PrivateRoute = ({ children, isAdmin = false }) => {
@@ -42,9 +42,9 @@ function App() {
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
-              <Route path="register" element={<VoterRegistration />} />
               <Route path="admin/login" element={<AdminLogin />} />
               <Route path="login" element={<VoterLogin />} />
+              <Route path="demo/aadhaar" element={<DemoAadhaarAdmin />} />
               
               {/* Protected Routes */}
               <Route 

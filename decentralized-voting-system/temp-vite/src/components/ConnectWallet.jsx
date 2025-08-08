@@ -136,16 +136,16 @@ const ConnectWallet = () => {
                 const data = await response.json();
                 if (data.pending) {
                   // They have a pending registration
-                  navigate('/register?pending=true');
+                  navigate('/login');
                   return;
                 }
               }
-              // No registration found or error checking status, redirect to registration
-              navigate('/register');
+              // Registration page removed; direct users to login
+              navigate('/login');
             } catch (backendError) {
               console.warn('Error checking backend voter status:', backendError);
-              // If backend check fails, still allow them to try registering
-              navigate('/register');
+              // If backend check fails, send them to login
+              navigate('/login');
             }
           }
         } catch (statusError) {
@@ -194,17 +194,17 @@ const ConnectWallet = () => {
                   if (response.ok) {
                     const data = await response.json();
                     if (data.pending) {
-                      // They have a pending registration
-                      navigate('/register?pending=true');
+                      // Registration page removed; direct users to login
+                      navigate('/login');
                       return;
                     }
                   }
-                  // No registration found or error checking status, redirect to registration
-                  navigate('/register');
+                  // Registration page removed; direct users to login
+                  navigate('/login');
                 } catch (backendError) {
                   console.warn('Error checking backend voter status:', backendError);
-                  // If backend check fails, still allow them to try registering
-                  navigate('/register');
+                  // If backend check fails, send them to login
+                  navigate('/login');
                 }
               }
             } catch (statusError) {

@@ -9,7 +9,7 @@ const auth = require('../middleware/auth');
 const { ethers } = require('ethers');
 
 // Check for required environment variables
-const requiredEnvVars = ['JWT_SECRET', 'VOTER_REGISTRY_ADDRESS', 'INFURA_URL', 'PRIVATE_KEY'];
+const requiredEnvVars = ['JWT_SECRET', 'VOTER_REGISTRY_ADDRESS', 'INFURA_URL', 'ADMIN_PRIVATE_KEY'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0) {
@@ -26,6 +26,7 @@ const VoterRegistryABI = [
   { "inputs": [{ "internalType": "address", "name": "_voter", "type": "address" }], "name": "isRegistered", "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }], "stateMutability": "view", "type": "function" },
   { "inputs": [{ "internalType": "address", "name": "_voter", "type": "address" }], "name": "markAsVoted", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "address", "name": "_voter", "type": "address" }], "name": "registerVoter", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  { "inputs": [], "name": "selfRegister", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "address", "name": "", "type": "address" }], "name": "registeredVoters", "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }], "stateMutability": "view", "type": "function" }
 ];
 
@@ -37,6 +38,105 @@ router.get('/', auth.authenticate, auth.isAdmin, async (req, res) => {
     } catch (error) {
         console.error('Error fetching voters:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Provide transaction data for self-registration (client signs and sends)
+router.get('/self-register/tx', async (req, res) => {
+    try {
+        const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
+        const network = await provider.getNetwork();
+        const iface = new ethers.Interface(VoterRegistryABI);
+        const data = iface.encodeFunctionData('selfRegister', []);
+
+        return res.json({
+            to: process.env.VOTER_REGISTRY_ADDRESS,
+            data,
+            value: '0x0',
+            chainId: Number(network.chainId)
+        });
+    } catch (error) {
+        console.error('Error building self-register tx:', error);
+        res.status(500).json({ message: 'Failed to build self-register transaction' });
+    }
+});
+
+// Confirm self-registration by checking on-chain state and approving locally
+router.post('/self-register/confirm', [
+    body('walletAddress').isEthereumAddress().withMessage('Invalid wallet address'),
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().withMessage('Please include a valid email'),
+    body('aadharNumber').isLength({ min: 12, max: 12 }).withMessage('Aadhar number must be 12 digits'),
+    body('mobileNumber').isLength({ min: 10, max: 10 }).withMessage('Mobile number must be 10 digits')
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, errors: errors.array() });
+        }
+
+        const { walletAddress, name, email, aadharNumber, mobileNumber } = req.body;
+
+        const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
+        const registry = new ethers.Contract(process.env.VOTER_REGISTRY_ADDRESS, VoterRegistryABI, provider);
+        const isRegistered = await registry.isRegistered(walletAddress);
+
+        if (!isRegistered) {
+            return res.status(400).json({
+                success: false,
+                message: 'Wallet not registered on-chain yet. Please submit the selfRegister transaction from your wallet.'
+            });
+        }
+
+        // Ensure Aadhar/Mobile are not linked to another wallet
+        const existingByDetails = await Voter.findOne({
+            $or: [{ aadharNumber }, { mobileNumber }],
+            walletAddress: { $ne: walletAddress.toLowerCase() }
+        });
+        if (existingByDetails) {
+            return res.status(409).json({
+                success: false,
+                message: 'Aadhar or Mobile Number is already registered with a different wallet address.'
+            });
+        }
+
+        // Upsert voter and mark approved
+        let voter = await Voter.findOne({ walletAddress: walletAddress.toLowerCase() });
+        if (!voter) {
+            voter = new Voter({
+                walletAddress: walletAddress.toLowerCase(),
+                name,
+                email,
+                aadharNumber,
+                mobileNumber,
+                status: 'approved',
+                statusReason: 'Self-registered on-chain'
+            });
+        } else {
+            voter.name = name;
+            voter.email = email;
+            voter.aadharNumber = aadharNumber;
+            voter.mobileNumber = mobileNumber;
+            voter.status = 'approved';
+            voter.statusReason = 'Self-registered on-chain';
+            voter.lastUpdated = new Date();
+        }
+
+        await voter.save();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Self-registration confirmed and approved.',
+            voter: {
+                id: voter.id,
+                walletAddress: voter.walletAddress,
+                name: voter.name,
+                status: voter.status
+            }
+        });
+    } catch (error) {
+        console.error('Error confirming self-registration:', error);
+        res.status(500).json({ success: false, message: 'Server error during self-registration confirmation.' });
     }
 });
 
@@ -273,12 +373,13 @@ router.put(
                 try {
                     console.log('Initializing blockchain connection...');
                     const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
-                    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+                    const wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
                     const contract = new ethers.Contract(
                         process.env.VOTER_REGISTRY_ADDRESS,
                         VoterRegistryABI,
                         wallet
                     );
+                    console.log('Using admin wallet for contract interaction:', process.env.ADMIN_WALLET_ADDRESS);
 
                     console.log('Checking if voter is already registered on-chain...');
                     const isAlreadyRegistered = await contract.isRegistered(voter.walletAddress);

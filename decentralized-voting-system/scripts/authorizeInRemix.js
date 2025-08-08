@@ -6,10 +6,10 @@
         console.log("Starting authorization script...");
 
         // Address of the VoterRegistry contract you want to interact with
-        const voterRegistryAddress = "0x12ca1ea9c3907b6e362ec9ea709d56c2e6866a6a";
+        const voterRegistryAddress = "0xad076bf830b5e173e3c0b356568e9f0211227730";
 
         // Address of the Voting contract to authorize
-        const votingContractAddress = "0xa0a2b330c3feec7c95ee3083937fe04273a21460";
+        const votingContractAddress = "0xd6906e4b28eee46fb2f5fded4f52309c6bd1b64c";
 
         // ABI for the VoterRegistry contract, specifically for the authorizeContract function
         const voterRegistryABI = [{

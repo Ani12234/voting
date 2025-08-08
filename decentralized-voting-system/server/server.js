@@ -99,6 +99,8 @@ connectDB().catch(console.error);
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/voters', require('./routes/voters'));
 app.use('/api/polls', require('./routes/polls'));
+app.use('/api/email-auth', require('./routes/emailAuth'));
+app.use('/api/aadhaar-admin', require('./routes/aadhaarAdmin'));
 app.use('/api/otp', require('./routes/otp'));
 app.use('/api/invoice', require('./routes/invoice'));
 

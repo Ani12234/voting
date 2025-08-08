@@ -24,8 +24,8 @@ const voterSchema = new mongoose.Schema({
     },
     mobileNumber: {
         type: String,
-        required: true,
-        unique: true,
+        required: false,
+        unique: false,
         trim: true
     },
     status: {

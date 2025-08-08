@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { ethers } from 'ethers';
 
@@ -6,6 +6,7 @@ export const useAccount = () => {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState(false);
+  const connectingRef = useRef(false);
 
   const disconnect = useCallback(() => {
     localStorage.removeItem('account');
@@ -42,15 +43,43 @@ export const useAccount = () => {
     };
   }, [disconnect]);
 
-  const login = async () => {
+  // Connect wallet and return address
+  const connectWallet = async () => {
     if (!window.ethereum) {
       throw new Error('Please install MetaMask to continue.');
     }
 
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    await provider.send('eth_requestAccounts', []);
-    const signer = await provider.getSigner();
-    const address = await signer.getAddress();
+    // Avoid concurrent requests that trigger MetaMask -32002 error
+    if (connectingRef.current) {
+      // If already connecting, try to read current accounts instead of re-requesting
+      const existing = await window.ethereum.request({ method: 'eth_accounts' });
+      if (existing && existing.length > 0) {
+        return { address: existing[0] };
+      }
+      throw new Error('Please complete the pending MetaMask connection request.');
+    }
+
+    connectingRef.current = true;
+    try {
+      // If an account is already connected, reuse it without prompting
+      const existing = await window.ethereum.request({ method: 'eth_accounts' });
+      if (existing && existing.length > 0) {
+        return { address: existing[0] };
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send('eth_requestAccounts', []);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+      return { address };
+    } finally {
+      connectingRef.current = false;
+    }
+  };
+
+  // Legacy login (wallet-only, using old backend route)
+  const login = async () => {
+    const { address } = await connectWallet();
 
     // Axios throws an error for non-2xx responses, which is handled by the component's try/catch.
     const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/voter/login`, { walletAddress: address });
@@ -71,10 +100,95 @@ export const useAccount = () => {
     return newAccount;
   };
 
+  // NEW: request OTP for Aadhaar+Email
+  const requestOtp = async ({ aadhaarNumber, email }) => {
+    const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/send-otp`, {
+      aadhaarNumber,
+      email,
+    });
+    return res.data;
+  };
+
+  // NEW: complete login with OTP (does on-chain register + DB upsert)
+  const loginWithEmailOtp = async ({ aadhaarNumber, email, name, otp }) => {
+    // If context already has an address, use it
+    if (account?.address) {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
+        aadhaarNumber,
+        email,
+        walletAddress: account.address,
+        otp,
+        name,
+      });
+
+      const data = res.data;
+      const newAccount = {
+        token: data.token,
+        address: account.address,
+        role: 'voter',
+        isAuthenticated: true,
+        ...data.voter,
+      };
+      localStorage.setItem('account', JSON.stringify(newAccount));
+      setAccount(newAccount);
+      return newAccount;
+    }
+
+    // Otherwise, try to read existing accounts before prompting MetaMask
+    try {
+      const existing = await window.ethereum?.request?.({ method: 'eth_accounts' });
+      if (existing && existing.length > 0) {
+        const addr = existing[0];
+        const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
+          aadhaarNumber,
+          email,
+          walletAddress: addr,
+          otp,
+          name,
+        });
+        const data = res.data;
+        const newAccount = {
+          token: data.token,
+          address: addr,
+          role: 'voter',
+          isAuthenticated: true,
+          ...data.voter,
+        };
+        localStorage.setItem('account', JSON.stringify(newAccount));
+        setAccount(newAccount);
+        return newAccount;
+      }
+    } catch (_) { /* ignore */ }
+
+    // Finally prompt user to connect wallet, with -32002 guard built-in
+    const { address } = await connectWallet();
+    const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
+      aadhaarNumber,
+      email,
+      walletAddress: address,
+      otp,
+      name,
+    });
+
+    const data = res.data;
+    const newAccount = {
+      token: data.token,
+      address,
+      role: 'voter',
+      isAuthenticated: true,
+      ...data.voter,
+    };
+    localStorage.setItem('account', JSON.stringify(newAccount));
+    setAccount(newAccount);
+    return newAccount;
+  };
+
   return {
     account,
     loading,
     login,
+    requestOtp,
+    loginWithEmailOtp,
     disconnect,
     setAccount,
     isMetaMaskInstalled

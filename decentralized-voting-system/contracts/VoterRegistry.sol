@@ -29,6 +29,12 @@ contract VoterRegistry {
         require(!registeredVoters[_voter], "Voter already registered");
         registeredVoters[_voter] = true;
     }
+
+    // Allow users to self-register using their own wallet
+    function selfRegister() public {
+        require(!registeredVoters[msg.sender], "Voter already registered");
+        registeredVoters[msg.sender] = true;
+    }
     
     function isRegistered(address _voter) public view returns (bool) {
         return registeredVoters[_voter];
