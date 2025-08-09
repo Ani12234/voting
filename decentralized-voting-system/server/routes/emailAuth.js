@@ -28,7 +28,9 @@ if (missing.length) {
 // OTPs are stored in MongoDB via `Otp` model with a TTL index on expiresAt
 
 function otpKey(aadhaar, email) {
-  return `${String(aadhaar)}:${String(email).toLowerCase()}`;
+  const a = String(aadhaar || '').replace(/\D/g, '');
+  const e = String(email || '').trim().toLowerCase();
+  return `${a}:${e}`;
 }
 
 function genOtp() {
@@ -36,7 +38,8 @@ function genOtp() {
 }
 
 function isExpired(expiresAt) {
-  return Date.now() > expiresAt;
+  const expMs = expiresAt instanceof Date ? expiresAt.getTime() : Number(expiresAt);
+  return Date.now() > expMs;
 }
 
 // Nodemailer transporter
@@ -83,11 +86,12 @@ router.post('/send-otp', [
     const code = genOtp();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
     const key = otpKey(aadhaarNumber, email);
-    await Otp.findOneAndUpdate(
+    const upserted = await Otp.findOneAndUpdate(
       { key },
       { code, expiresAt },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    console.log('[emailAuth] OTP upserted for key:', key, 'expiresAt:', expiresAt.toISOString());
 
     const mailOpts = {
       from: process.env.EMAIL_FROM,
@@ -134,6 +138,7 @@ router.post('/login', [
     // Verify OTP via Mongo
     const key = otpKey(aadhaarNumber, email);
     const entry = await Otp.findOne({ key });
+    console.log('[emailAuth] OTP lookup for key:', key, 'found:', !!entry);
     if (!entry) {
       return res.status(400).json({ success: false, message: 'OTP not requested or expired.' });
     }
