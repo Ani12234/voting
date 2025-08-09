@@ -1,9 +1,37 @@
 const path = require('path');
 const xlsx = require('xlsx');
+const fs = require('fs');
 
 // Load Excel once at startup and build fast lookup maps
 // Excel file expected at: server/config/random_emails_aadhaar_1000.xlsx
-const EXCEL_PATH = path.join(__dirname, 'random_emails_aadhaar_1000.xlsx');
+const BUNDLED_EXCEL_PATH = path.join(__dirname, 'random_emails_aadhaar_1000.xlsx');
+const TMP_EXCEL_PATH = path.join('/tmp', 'random_emails_aadhaar_1000.xlsx');
+
+// In serverless (Vercel), filesystem is read-only except /tmp. Ensure a writable copy exists.
+function getExcelPath() {
+  const inServerless = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
+  if (!inServerless) {
+    return BUNDLED_EXCEL_PATH;
+  }
+  try {
+    // If a /tmp copy exists use it; else seed it from bundled asset (if present).
+    if (!fs.existsSync(TMP_EXCEL_PATH)) {
+      if (fs.existsSync(BUNDLED_EXCEL_PATH)) {
+        fs.copyFileSync(BUNDLED_EXCEL_PATH, TMP_EXCEL_PATH);
+      } else {
+        // Ensure directory exists and create an empty workbook if source missing
+        try { fs.mkdirSync(path.dirname(TMP_EXCEL_PATH), { recursive: true }); } catch {}
+        const wb = xlsx.utils.book_new();
+        const ws = xlsx.utils.json_to_sheet([]);
+        xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
+        xlsx.writeFile(wb, TMP_EXCEL_PATH);
+      }
+    }
+  } catch (e) {
+    console.error('[AADHAAR-DB] Error preparing writable Excel path:', e.message);
+  }
+  return TMP_EXCEL_PATH;
+}
 
 let aadharToEmail = new Map();
 let emailToAadhar = new Map();
@@ -18,7 +46,8 @@ function normalizeEmail(value) {
 
 function loadExcel() {
   try {
-    const wb = xlsx.readFile(EXCEL_PATH);
+    const excelPath = getExcelPath();
+    const wb = xlsx.readFile(excelPath);
     const sheetName = wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
     const rows = xlsx.utils.sheet_to_json(ws, { defval: '' });
@@ -67,4 +96,5 @@ module.exports = {
   getAadhaarByEmail,
   isValidPair,
   reload: loadExcel,
+  getExcelPath,
 };

@@ -8,8 +8,8 @@ const aadhaarDb = require('../config/aadhaarDb');
 
 // DEMO-ONLY: Append a record (aadhaar,email) to the Excel sheet and reload cache.
 // WARNING: Do NOT expose this in production without proper authentication/authorization.
-
-const EXCEL_PATH = path.join(__dirname, '..', 'config', 'random_emails_aadhaar_1000.xlsx');
+// Use the writable Excel path (in serverless, /tmp). Falls back to bundled file in dev.
+const getExcelPath = aadhaarDb.getExcelPath;
 
 function normalizeAadhaar(v) {
   return String(v || '').replace(/\D/g, '');
@@ -37,7 +37,8 @@ router.post('/add', [
 
   try {
     // Load workbook
-    const wb = xlsx.readFile(EXCEL_PATH);
+    const excelPath = getExcelPath();
+    const wb = xlsx.readFile(excelPath);
     const sheetName = wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
     const rows = xlsx.utils.sheet_to_json(ws, { defval: '' });
@@ -64,7 +65,7 @@ router.post('/add', [
     const newWs = xlsx.utils.json_to_sheet(data, { skipHeader: false });
     wb.Sheets[sheetName] = newWs;
 
-    xlsx.writeFile(wb, EXCEL_PATH);
+    xlsx.writeFile(wb, excelPath);
 
     // Reload in-memory cache
     aadhaarDb.reload();
