@@ -8,6 +8,7 @@ const { ethers } = require('ethers');
 require('dotenv').config();
 
 const Voter = require('../models/Voter');
+const Otp = require('../models/Otp');
 const aadhaarDb = require('../config/aadhaarDb');
 const VoterRegistry = require('../../artifacts/contracts/VoterRegistry.sol/VoterRegistry.json');
 
@@ -24,9 +25,7 @@ if (missing.length) {
   console.warn('[emailAuth] Missing env vars:', missing.join(', '));
 }
 
-// In-memory OTP store: { key: { code, expiresAt } }
-// Keyed by `${aadhaarNumber}:${email}`
-const otpStore = new Map();
+// OTPs are stored in MongoDB via `Otp` model with a TTL index on expiresAt
 
 function otpKey(aadhaar, email) {
   return `${String(aadhaar)}:${String(email).toLowerCase()}`;
@@ -82,8 +81,13 @@ router.post('/send-otp', [
     }
 
     const code = genOtp();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-    otpStore.set(otpKey(aadhaarNumber, email), { code, expiresAt });
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const key = otpKey(aadhaarNumber, email);
+    await Otp.findOneAndUpdate(
+      { key },
+      { code, expiresAt },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     const mailOpts = {
       from: process.env.EMAIL_FROM,
@@ -127,21 +131,21 @@ router.post('/login', [
       return res.status(400).json({ success: false, message: 'Aadhaar and email do not match our records.' });
     }
 
-    // Verify OTP
+    // Verify OTP via Mongo
     const key = otpKey(aadhaarNumber, email);
-    const entry = otpStore.get(key);
+    const entry = await Otp.findOne({ key });
     if (!entry) {
       return res.status(400).json({ success: false, message: 'OTP not requested or expired.' });
     }
     if (isExpired(entry.expiresAt)) {
-      otpStore.delete(key);
+      await Otp.deleteOne({ key });
       return res.status(400).json({ success: false, message: 'OTP expired.' });
     }
     if (entry.code !== otp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP.' });
     }
     // OTP is single-use
-    otpStore.delete(key);
+    await Otp.deleteOne({ key });
 
     // Ensure required chain envs are present
     const chainRequired = ['INFURA_URL', 'ADMIN_PRIVATE_KEY', 'VOTER_REGISTRY_ADDRESS'];
