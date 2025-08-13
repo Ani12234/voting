@@ -20,16 +20,25 @@ const VoterLogin = () => {
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
+  const [lastOtpContext, setLastOtpContext] = useState(null); // { aadhaar, email, at }
+
+  const normalizeAadhaar = (val) => String(val ?? '').replace(/\D/g, '');
+  const normalizeEmail = (val) => String(val ?? '').trim().toLowerCase();
 
   const handleSendOtp = async () => {
     setError('');
     setInfo('');
     setIsLoading(true);
     try {
-      await requestOtp({ aadhaarNumber, email });
+      const aadhaarNorm = normalizeAadhaar(aadhaarNumber);
+      const emailNorm = normalizeEmail(email);
+      await requestOtp({ aadhaarNumber: aadhaarNorm, email: emailNorm });
       setOtpSent(true);
       setInfo('OTP sent to your email. Check inbox/spam.');
       setShowOtpModal(true);
+      const ctx = { aadhaar: aadhaarNorm, email: emailNorm, at: Date.now() };
+      setLastOtpContext(ctx);
+      try { sessionStorage.setItem('lastOtpContext', JSON.stringify(ctx)); } catch (_) {}
     } catch (err) {
       console.error('Send OTP error:', err);
       const errorsArray = err?.response?.data?.errors;
@@ -46,6 +55,18 @@ const VoterLogin = () => {
     setInfo('');
     setIsLoading(true);
     try {
+      // Guard: ensure OTP was requested for this exact normalized pair
+      const aadhaarNorm = normalizeAadhaar(aadhaarNumber);
+      const emailNorm = normalizeEmail(email);
+      let ctx = lastOtpContext;
+      if (!ctx) {
+        try { ctx = JSON.parse(sessionStorage.getItem('lastOtpContext') || 'null'); } catch (_) { ctx = null; }
+      }
+      if (!ctx || ctx.aadhaar !== aadhaarNorm || ctx.email !== emailNorm) {
+        setIsLoading(false);
+        return setError('Please request OTP for this Aadhaar and Email first.');
+      }
+
       await loginWithEmailOtp({ aadhaarNumber, email, name, otp });
       navigate('/dashboard');
     } catch (err) {
