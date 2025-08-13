@@ -287,12 +287,7 @@ router.post('/:pollId/vote', [auth.authenticate, auth.isVoter, auth.isApprovedVo
         const voterId = req.user.id; // Use the user ID from the token
         const { optionText } = req.body;
 
-        // Check if the voter has already voted on this poll
-        const existingVote = await Vote.findOne({ poll: pollId, voter: voterId });
-        if (existingVote) {
-            return res.status(409).json({ message: 'You have already voted on this poll.' });
-        }
-
+        // Validate poll and option first
         const poll = await Poll.findById(pollId);
         if (!poll) {
             return res.status(404).json({ message: 'Poll not found' });
@@ -303,21 +298,46 @@ router.post('/:pollId/vote', [auth.authenticate, auth.isVoter, auth.isApprovedVo
             return res.status(400).json({ message: 'Invalid option selected.' });
         }
 
-        // Create a new vote record for each vote
-        const newVote = new Vote({
-            poll: pollId,
-            voter: voterId,
-            optionText: optionToUpdate.text
-        });
+        // Policy B: One vote across ALL polls per identity
+        // Atomically claim the right to vote by setting hasVoted=true only if it was not already set
+        const claim = await Voter.updateOne(
+            { _id: voterId, hasVoted: { $ne: true } },
+            { $set: { hasVoted: true, lastUpdated: new Date() } }
+        );
+        if (!claim.matchedCount) {
+            return res.status(409).json({ message: 'You have already used your one vote across all polls.' });
+        }
 
-        // Increment the vote count for the option
-        optionToUpdate.votes += 1;
+        // Optional safety: also prevent duplicate vote records for the same poll
+        const existingVote = await Vote.findOne({ poll: pollId, voter: voterId });
+        if (existingVote) {
+            // Release claim since this specific poll already has a recorded vote
+            await Voter.updateOne({ _id: voterId }, { $set: { hasVoted: true, lastUpdated: new Date() } });
+            return res.status(409).json({ message: 'You have already voted on this poll.' });
+        }
 
-        await poll.save();
-        await newVote.save();
+        try {
+            // Create a new vote record for each vote
+            const newVote = new Vote({
+                poll: pollId,
+                voter: voterId,
+                optionText: optionToUpdate.text
+            });
 
-        // Return the new vote object, which contains the unique ID for the receipt
-        res.status(201).json(newVote);
+            // Increment the vote count for the option
+            optionToUpdate.votes += 1;
+
+            await poll.save();
+            await newVote.save();
+
+            // Return the new vote object, which contains the unique ID for the receipt
+            return res.status(201).json(newVote);
+        } catch (innerErr) {
+            // Revert the claim if anything fails after claiming
+            await Voter.updateOne({ _id: voterId }, { $set: { hasVoted: false, lastUpdated: new Date() } });
+            console.error('Vote processing error, claim reverted:', innerErr);
+            return res.status(500).json({ message: 'Server error during vote submission.' });
+        }
 
     } catch (error) {
         console.error('Vote submission error:', error);

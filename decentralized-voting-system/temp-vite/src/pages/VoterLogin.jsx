@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { useAccountContext } from '../context/AccountContext';
+import Modal from '../components/ui/Modal';
+import OtpInput from '../components/ui/OtpInput';
 
 const VoterLogin = () => {
   const navigate = useNavigate();
@@ -17,6 +19,7 @@ const VoterLogin = () => {
   const [name, setName] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
 
   const handleSendOtp = async () => {
     setError('');
@@ -26,9 +29,12 @@ const VoterLogin = () => {
       await requestOtp({ aadhaarNumber, email });
       setOtpSent(true);
       setInfo('OTP sent to your email. Check inbox/spam.');
+      setShowOtpModal(true);
     } catch (err) {
       console.error('Send OTP error:', err);
-      const msg = err?.response?.data?.message || err.message || 'Failed to send OTP';
+      const errorsArray = err?.response?.data?.errors;
+      const details = Array.isArray(errorsArray) ? errorsArray.map(e => e.msg).join(', ') : '';
+      const msg = err?.response?.data?.message || details || err.message || 'Failed to send OTP';
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -44,7 +50,9 @@ const VoterLogin = () => {
       navigate('/dashboard');
     } catch (err) {
       console.error('Login with OTP error:', err);
-      const msg = err?.response?.data?.message || err.message || 'Login failed';
+      const errorsArray = err?.response?.data?.errors;
+      const details = Array.isArray(errorsArray) ? errorsArray.map(e => e.msg).join(', ') : '';
+      const msg = err?.response?.data?.message || details || err.message || 'Login failed';
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -110,16 +118,13 @@ const VoterLogin = () => {
               </Button>
             ) : (
               <div className="space-y-3">
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">Enter OTP</label>
-                  <input
-                    className="w-full border rounded p-2"
-                    placeholder="6-digit code"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                  />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Enter the 6-digit OTP sent to your email.</span>
+                  <Button type="button" onClick={() => setShowOtpModal(true)} className="px-3 py-1 text-sm">
+                    Enter OTP
+                  </Button>
                 </div>
-                <Button onClick={handleVerifyAndLogin} disabled={isLoading || !isMetaMaskInstalled || !otp} className="w-full">
+                <Button onClick={handleVerifyAndLogin} disabled={isLoading || !isMetaMaskInstalled || otp.trim().length !== 6} className="w-full">
                   {isLoading ? 'Verifying...' : 'Verify & Login'}
                 </Button>
               </div>
@@ -127,6 +132,23 @@ const VoterLogin = () => {
           </div>
         </Card>
       </motion.div>
+      {/* OTP Modal */}
+      <Modal isOpen={showOtpModal} onClose={() => setShowOtpModal(false)} title="Enter OTP">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">We sent a 6-digit code to {email}. Enter it below.</p>
+          <div className="flex justify-center">
+            <OtpInput length={6} value={otp} onChange={setOtp} onComplete={() => handleVerifyAndLogin()} />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="secondary" onClick={() => setShowOtpModal(false)}>
+              Close
+            </Button>
+            <Button onClick={handleVerifyAndLogin} disabled={isLoading || otp.trim().length !== 6}>
+              {isLoading ? 'Verifying...' : 'Verify'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

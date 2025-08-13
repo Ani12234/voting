@@ -146,7 +146,8 @@ router.post('/login', [
       await Otp.deleteOne({ key });
       return res.status(400).json({ success: false, message: 'OTP expired.' });
     }
-    if (entry.code !== otp) {
+    const cleanOtp = String(otp ?? '').trim();
+    if (entry.code !== cleanOtp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP.' });
     }
     // OTP is single-use
@@ -184,23 +185,52 @@ router.post('/login', [
       return res.status(500).json({ success: false, message: 'Blockchain interaction failed.' });
     }
 
-    // Upsert local voter as approved
-    let voter = await Voter.findOne({ walletAddress: { $regex: new RegExp('^' + walletAddress + '$', 'i') } });
-    if (!voter) {
+    // Upsert local voter as approved with de-duplication (unique on aadharNumber and walletAddress)
+    const normalizedAadhaar = String(aadhaarNumber || '').replace(/\D/g, '');
+
+    const existingByAadhaar = await Voter.findOne({ aadharNumber: normalizedAadhaar });
+    const existingByWallet = await Voter.findOne({ walletAddress: { $regex: new RegExp('^' + walletAddress + '$', 'i') } });
+
+    let voter;
+    if (existingByAadhaar && existingByWallet && String(existingByAadhaar._id) !== String(existingByWallet._id)) {
+      // Merge: prefer the Aadhaar record as primary, update it with wallet and other fields, remove the wallet-only duplicate
+      voter = existingByAadhaar;
+      voter.walletAddress = walletAddress.toLowerCase();
+      voter.name = name || voter.name;
+      voter.email = String(email).toLowerCase();
+      voter.status = 'approved';
+      voter.lastUpdated = new Date();
+
+      try {
+        await voter.save();
+      } catch (mergeSaveErr) {
+        console.error('[emailAuth] Merge save error:', mergeSaveErr?.message);
+        return res.status(500).json({ success: false, message: 'Database error merging voter records.' });
+      }
+
+      try {
+        await Voter.deleteOne({ _id: existingByWallet._id });
+      } catch (mergeDeleteErr) {
+        console.error('[emailAuth] Merge cleanup delete error:', mergeDeleteErr?.message);
+        // Non-fatal; continue
+      }
+    } else if (existingByAadhaar || existingByWallet) {
+      voter = existingByAadhaar || existingByWallet;
+      voter.walletAddress = walletAddress.toLowerCase();
+      voter.name = name || voter.name;
+      voter.email = String(email).toLowerCase();
+      voter.aadharNumber = normalizedAadhaar;
+      voter.status = 'approved';
+      voter.lastUpdated = new Date();
+    } else {
       voter = new Voter({
         walletAddress: walletAddress.toLowerCase(),
         name: name || '',
         email: String(email).toLowerCase(),
-        aadharNumber: String(aadhaarNumber),
+        aadharNumber: normalizedAadhaar,
         status: 'approved',
         hasVoted: false,
       });
-    } else {
-      voter.name = name || voter.name;
-      voter.email = String(email).toLowerCase();
-      voter.aadharNumber = String(aadhaarNumber);
-      voter.status = 'approved';
-      voter.lastUpdated = new Date();
     }
     try {
       await voter.save();

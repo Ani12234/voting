@@ -10,7 +10,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 const VoterDashboard = () => {
   const navigate = useNavigate();
-  const { account } = useAccountContext();
+  const { account, setAccount } = useAccountContext();
   const [polls, setPolls] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,6 +78,11 @@ const VoterDashboard = () => {
       return;
     }
 
+    if (account?.hasVoted) {
+      toast.info('You have already used your one vote across all polls.');
+      return;
+    }
+
     if (!window.ethereum) {
       toast.error('Please install MetaMask wallet to vote.');
       return;
@@ -120,12 +125,29 @@ const VoterDashboard = () => {
 
       await response.json();
       toast.success('Vote recorded successfully!');
+
+      // Mark the account as having voted (Policy B) and persist
+      setAccount(prev => {
+        const updated = { ...(prev || {}), hasVoted: true };
+        try { localStorage.setItem('account', JSON.stringify(updated)); } catch (_) {}
+        return updated;
+      });
+
       loadPolls(); // Refresh polls to show updated vote counts
       setSelectedOptions(prev => ({ ...prev, [pollIndex]: undefined })); // Clear selection
 
     } catch (error) {
       console.error('Error casting vote:', error);
       const reason = error.reason || error.data?.message || error.message || 'An unknown error occurred.';
+
+      // If backend enforces Policy B and returns 409, reflect in UI
+      if (/already used your one vote/i.test(reason) || /409/.test(reason)) {
+        setAccount(prev => {
+          const updated = { ...(prev || {}), hasVoted: true };
+          try { localStorage.setItem('account', JSON.stringify(updated)); } catch (_) {}
+          return updated;
+        });
+      }
       toast.error(`Failed to cast vote: ${reason}`);
       setError(`Error casting vote: ${reason}`);
     }
@@ -153,7 +175,11 @@ const VoterDashboard = () => {
                   <h3 className="text-xl font-semibold text-gray-800">{poll.title}</h3>
                   <p className="text-gray-600 mt-2">{poll.description}</p>
                   
-                  {votedPolls.has(poll._id) ? (
+                  {account?.hasVoted ? (
+                    <div className="mt-4 text-center text-blue-700 font-semibold bg-blue-50 p-3 rounded-lg">
+                      You have already used your one vote across all polls.
+                    </div>
+                  ) : votedPolls.has(poll._id) ? (
                     <div className="mt-4 text-center text-green-600 font-semibold bg-green-50 p-3 rounded-lg">
                       You have already voted in this poll.
                     </div>
@@ -169,6 +195,7 @@ const VoterDashboard = () => {
                               checked={selectedOptions[pollIndex] === optionIndex}
                               onChange={() => handleOptionChange(pollIndex, optionIndex)}
                               className="form-radio h-5 w-5 text-blue-600 focus:ring-blue-500"
+                              disabled={account?.hasVoted}
                             />
                             <span className="ml-4 text-lg text-gray-700">{option.text}</span>
                           </label>
@@ -178,7 +205,7 @@ const VoterDashboard = () => {
                         <button
                           onClick={() => vote(pollIndex, poll)}
                           className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
-                          disabled={selectedOptions[pollIndex] === undefined}
+                          disabled={account?.hasVoted || selectedOptions[pollIndex] === undefined}
                         >
                           <FaVoteYea className="inline-block mr-2" />
                           Cast Your Vote

@@ -111,13 +111,14 @@ export const useAccount = () => {
 
   // NEW: complete login with OTP (does on-chain register + DB upsert)
   const loginWithEmailOtp = async ({ aadhaarNumber, email, name, otp }) => {
+    const cleanOtp = String(otp ?? '').trim();
     // If context already has an address, use it
     if (account?.address) {
       const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
         aadhaarNumber,
         email,
         walletAddress: account.address,
-        otp,
+        otp: cleanOtp,
         name,
       });
 
@@ -143,7 +144,7 @@ export const useAccount = () => {
           aadhaarNumber,
           email,
           walletAddress: addr,
-          otp,
+          otp: cleanOtp,
           name,
         });
         const data = res.data;
@@ -166,7 +167,7 @@ export const useAccount = () => {
       aadhaarNumber,
       email,
       walletAddress: address,
-      otp,
+      otp: cleanOtp,
       name,
     });
 
