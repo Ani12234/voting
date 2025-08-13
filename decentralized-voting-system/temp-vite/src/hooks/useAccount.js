@@ -102,9 +102,11 @@ export const useAccount = () => {
 
   // NEW: request OTP for Aadhaar+Email
   const requestOtp = async ({ aadhaarNumber, email }) => {
+    const normalizedAadhaar = String(aadhaarNumber ?? '').replace(/\D/g, '');
+    const normalizedEmail = String(email ?? '').trim().toLowerCase();
     const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/send-otp`, {
-      aadhaarNumber,
-      email,
+      aadhaarNumber: normalizedAadhaar,
+      email: normalizedEmail,
     });
     return res.data;
   };
@@ -112,11 +114,13 @@ export const useAccount = () => {
   // NEW: complete login with OTP (does on-chain register + DB upsert)
   const loginWithEmailOtp = async ({ aadhaarNumber, email, name, otp }) => {
     const cleanOtp = String(otp ?? '').trim();
+    const normalizedAadhaar = String(aadhaarNumber ?? '').replace(/\D/g, '');
+    const normalizedEmail = String(email ?? '').trim().toLowerCase();
     // If context already has an address, use it
     if (account?.address) {
       const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
-        aadhaarNumber,
-        email,
+        aadhaarNumber: normalizedAadhaar,
+        email: normalizedEmail,
         walletAddress: account.address,
         otp: cleanOtp,
         name,
@@ -141,8 +145,8 @@ export const useAccount = () => {
       if (existing && existing.length > 0) {
         const addr = existing[0];
         const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
-          aadhaarNumber,
-          email,
+          aadhaarNumber: normalizedAadhaar,
+          email: normalizedEmail,
           walletAddress: addr,
           otp: cleanOtp,
           name,
@@ -164,8 +168,8 @@ export const useAccount = () => {
     // Finally prompt user to connect wallet, with -32002 guard built-in
     const { address } = await connectWallet();
     const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
-      aadhaarNumber,
-      email,
+      aadhaarNumber: normalizedAadhaar,
+      email: normalizedEmail,
       walletAddress: address,
       otp: cleanOtp,
       name,
