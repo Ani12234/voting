@@ -298,21 +298,10 @@ router.post('/:pollId/vote', [auth.authenticate, auth.isVoter, auth.isApprovedVo
             return res.status(400).json({ message: 'Invalid option selected.' });
         }
 
-        // Policy B: One vote across ALL polls per identity
-        // Atomically claim the right to vote by setting hasVoted=true only if it was not already set
-        const claim = await Voter.updateOne(
-            { _id: voterId, hasVoted: { $ne: true } },
-            { $set: { hasVoted: true, lastUpdated: new Date() } }
-        );
-        if (!claim.matchedCount) {
-            return res.status(409).json({ message: 'You have already used your one vote across all polls.' });
-        }
-
-        // Optional safety: also prevent duplicate vote records for the same poll
+        // Policy: One vote per poll (per-poll voting)
+        // Prevent duplicate votes by the same voter on the same poll
         const existingVote = await Vote.findOne({ poll: pollId, voter: voterId });
         if (existingVote) {
-            // Release claim since this specific poll already has a recorded vote
-            await Voter.updateOne({ _id: voterId }, { $set: { hasVoted: true, lastUpdated: new Date() } });
             return res.status(409).json({ message: 'You have already voted on this poll.' });
         }
 
@@ -330,12 +319,20 @@ router.post('/:pollId/vote', [auth.authenticate, auth.isVoter, auth.isApprovedVo
             await poll.save();
             await newVote.save();
 
+            // Record poll participation for the voter (no global hasVoted flag)
+            await Voter.updateOne(
+                { _id: voterId },
+                { $addToSet: { votedPolls: poll._id }, $set: { lastUpdated: new Date() } }
+            );
+
             // Return the new vote object, which contains the unique ID for the receipt
             return res.status(201).json(newVote);
         } catch (innerErr) {
-            // Revert the claim if anything fails after claiming
-            await Voter.updateOne({ _id: voterId }, { $set: { hasVoted: false, lastUpdated: new Date() } });
-            console.error('Vote processing error, claim reverted:', innerErr);
+            // Translate duplicate key from DB unique index (poll+voter) into a 409
+            if (innerErr && (innerErr.code === 11000 || /E11000/.test(String(innerErr.message)))) {
+                return res.status(409).json({ message: 'You have already voted on this poll.' });
+            }
+            console.error('Vote processing error:', innerErr);
             return res.status(500).json({ message: 'Server error during vote submission.' });
         }
 

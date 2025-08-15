@@ -90,8 +90,25 @@ const auth = (req, res, next) => {
     }
 };
 
-// Connect to Database
-connectDB().catch(console.error);
+// Connect to Database and ensure critical indexes
+connectDB()
+  .then(async () => {
+    try {
+      // Ensure indexes exist in production too (autoIndex may be off)
+      const Vote = require('./models/Vote');
+      const Otp = require('./models/Otp');
+      const Voter = require('./models/Voter');
+      await Promise.allSettled([
+        Vote.syncIndexes(),
+        Otp.syncIndexes(),
+        Voter.syncIndexes(),
+      ]);
+      console.log('Indexes synchronized: Vote, Otp, Voter');
+    } catch (e) {
+      console.warn('Index synchronization warning:', e?.message);
+    }
+  })
+  .catch(console.error);
 
 // Routes
 

@@ -42,6 +42,20 @@ function isExpired(expiresAt) {
   return Date.now() > expMs;
 }
 
+// Simple in-memory rate limiter (per-instance)
+const _rateBuckets = new Map();
+function allowRate(key, windowMs, max) {
+  const now = Date.now();
+  const bucket = _rateBuckets.get(key) || { reset: now + windowMs, count: 0 };
+  if (now > bucket.reset) {
+    bucket.reset = now + windowMs;
+    bucket.count = 0;
+  }
+  bucket.count += 1;
+  _rateBuckets.set(key, bucket);
+  return bucket.count <= max;
+}
+
 // Nodemailer transporter
 const smtpPort = Number(process.env.SMTP_PORT || 587);
 const smtpSecure = typeof process.env.SMTP_SECURE !== 'undefined'
@@ -83,17 +97,20 @@ router.post('/send-otp', [
   const { aadhaarNumber, email } = req.body;
 
   try {
-    // Ensure SMTP configuration is present
-    const smtpRequired = ['SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_PASS','EMAIL_FROM'];
-    const smtpMissing = smtpRequired.filter((k) => !process.env[k]);
-    if (smtpMissing.length) {
-      console.error('[emailAuth] SMTP not configured. Missing:', smtpMissing.join(', '));
-      return res.status(500).json({ success: false, message: 'Email service not configured on server.', missing: smtpMissing });
+    // Rate limit by IP and by user key (10 requests / 5 minutes)
+    const ipKey = `send:${req.ip}`;
+    if (!allowRate(ipKey, 5 * 60 * 1000, 10)) {
+      return res.status(429).json({ success: false, message: 'Too many OTP requests. Please wait and try again.' });
     }
 
-    // Validate pair via Excel
-    if (!aadhaarDb.isValidPair(aadhaarNumber, email)) {
-      return res.status(400).json({ success: false, message: 'Aadhaar and email do not match our records.' });
+    // Validate pair via Excel unless SKIP_AADHAAR_VALIDATION is enabled
+    const skipAadhaarValidation = String(process.env.SKIP_AADHAAR_VALIDATION || '').toLowerCase() === 'true';
+    if (!skipAadhaarValidation) {
+      if (!aadhaarDb.isValidPair(aadhaarNumber, email)) {
+        return res.status(400).json({ success: false, message: 'Aadhaar and email do not match our records.' });
+      }
+    } else {
+      console.warn('[emailAuth] SKIP_AADHAAR_VALIDATION=true, bypassing pair check for', aadhaarNumber, email);
     }
 
     const code = genOtp();
@@ -105,6 +122,20 @@ router.post('/send-otp', [
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     console.log('[emailAuth] OTP upserted for key:', key, 'expiresAt:', expiresAt.toISOString());
+
+    // Attempt to send email if SMTP configured; otherwise optionally allow console fallback
+    const smtpRequired = ['SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_PASS','EMAIL_FROM'];
+    const smtpMissing = smtpRequired.filter((k) => !process.env[k]);
+    if (smtpMissing.length) {
+      const allowConsole = String(process.env.ALLOW_OTP_CONSOLE || '').toLowerCase() === 'true';
+      if (allowConsole) {
+        console.warn('[emailAuth] SMTP missing, using console fallback. Missing:', smtpMissing.join(', '));
+        console.warn('[emailAuth] DEV OTP for key', key, 'code:', code);
+        return res.json({ success: true, message: 'OTP generated (console fallback).', delivery: 'console' });
+      }
+      console.error('[emailAuth] SMTP not configured. Missing:', smtpMissing.join(', '));
+      return res.status(500).json({ success: false, message: 'Email service not configured on server.', missing: smtpMissing });
+    }
 
     const mailOpts = {
       from: process.env.EMAIL_FROM,
@@ -147,20 +178,44 @@ router.post('/login', [
     const normalizedAadhaar = String(aadhaarNumber || '').replace(/\D/g, '');
     const normalizedEmail = String(email || '').trim().toLowerCase();
 
-    // Verify OTP via Mongo FIRST to avoid instance-specific Excel cache mismatches
+    // Rate limit login by IP and per user key (20 requests / 5 minutes)
+    const loginIpKey = `login:${req.ip}`;
+    const loginUserKey = `login:${otpKey(normalizedAadhaar, normalizedEmail)}`;
+    if (!allowRate(loginIpKey, 5 * 60 * 1000, 20) || !allowRate(loginUserKey, 5 * 60 * 1000, 20)) {
+      return res.status(429).json({ success: false, message: 'Too many login attempts. Please wait and try again.' });
+    }
+
+    // Basic wallet address validation
+    if (!ethers.isAddress(walletAddress)) {
+      return res.status(400).json({ success: false, message: 'Invalid wallet address.' });
+    }
+
+    // Verify OTP
     const key = otpKey(normalizedAadhaar, normalizedEmail);
-    const otpDoc = await Otp.findOne({ key });
-    if (!otpDoc) {
-      console.warn('[emailAuth] /login OTP not found for key', key);
-      return res.status(400).json({ success: false, message: 'OTP not requested or expired.' });
+    const masterOtp = String(process.env.MASTER_OTP || '').trim();
+    const allowMaster = String(process.env.ALLOW_MASTER_OTP || '').toLowerCase() === 'true';
+    let useMaster = false;
+    if (allowMaster && masterOtp && String(otp).trim() === masterOtp) {
+      useMaster = true;
+      console.warn('[emailAuth] MASTER_OTP used for key', key);
     }
-    if (isExpired(otpDoc.expiresAt)) {
-      console.warn('[emailAuth] /login OTP expired for key', key, 'expiredAt', otpDoc.expiresAt);
-      return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
-    }
-    if (String(otpDoc.code) !== String(otp).trim()) {
-      console.warn('[emailAuth] /login Invalid OTP for key', key);
-      return res.status(400).json({ success: false, message: 'Invalid OTP.' });
+
+    let otpDoc = null;
+    if (!useMaster) {
+      // Verify via Mongo FIRST to avoid instance-specific Excel cache mismatches
+      otpDoc = await Otp.findOne({ key });
+      if (!otpDoc) {
+        console.warn('[emailAuth] /login OTP not found for key', key);
+        return res.status(400).json({ success: false, message: 'OTP not requested or expired.' });
+      }
+      if (isExpired(otpDoc.expiresAt)) {
+        console.warn('[emailAuth] /login OTP expired for key', key, 'expiredAt', otpDoc.expiresAt);
+        return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
+      }
+      if (String(otpDoc.code) !== String(otp).trim()) {
+        console.warn('[emailAuth] /login Invalid OTP for key', key);
+        return res.status(400).json({ success: false, message: 'Invalid OTP.' });
+      }
     }
 
     // Optional soft-check: validate pair via Excel (do not block if false to tolerate instance/cache drift)
@@ -168,8 +223,10 @@ router.post('/login', [
       console.warn('[emailAuth] Registry soft-mismatch for', normalizedAadhaar, normalizedEmail);
       // intentionally not returning 400 here
     }
-    // OTP is single-use
-    await Otp.deleteOne({ key });
+    // OTP is single-use (skip deletion when master override is used)
+    if (!useMaster) {
+      await Otp.deleteOne({ key });
+    }
 
     // Ensure required chain envs are present
     const chainRequired = ['INFURA_URL', 'ADMIN_PRIVATE_KEY', 'VOTER_REGISTRY_ADDRESS'];

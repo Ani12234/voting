@@ -21,6 +21,7 @@ const voteSchema = new mongoose.Schema({
     }
 }, { collection: 'votes' });
 
-
+// Enforce one-vote-per-poll at the DB level
+voteSchema.index({ poll: 1, voter: 1 }, { unique: true, name: 'uniq_poll_voter' });
 
 module.exports = mongoose.model('Vote', voteSchema);
