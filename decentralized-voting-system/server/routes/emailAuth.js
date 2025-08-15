@@ -65,6 +65,19 @@ router.post('/send-otp', [
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    // Debug log for validation failures
+    try {
+      console.warn('[emailAuth] /login validation failed:', {
+        body: {
+          aadhaarNumber: req.body?.aadhaarNumber,
+          email: req.body?.email,
+          walletAddress: req.body?.walletAddress,
+          otp: req.body?.otp ? '[provided]' : '[missing]',
+          name: req.body?.name,
+        },
+        errors: errors.array(),
+      });
+    } catch (_) {}
     return res.status(400).json({ success: false, errors: errors.array() });
   }
   const { aadhaarNumber, email } = req.body;
@@ -138,12 +151,15 @@ router.post('/login', [
     const key = otpKey(normalizedAadhaar, normalizedEmail);
     const otpDoc = await Otp.findOne({ key });
     if (!otpDoc) {
+      console.warn('[emailAuth] /login OTP not found for key', key);
       return res.status(400).json({ success: false, message: 'OTP not requested or expired.' });
     }
     if (isExpired(otpDoc.expiresAt)) {
+      console.warn('[emailAuth] /login OTP expired for key', key, 'expiredAt', otpDoc.expiresAt);
       return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
     }
     if (String(otpDoc.code) !== String(otp).trim()) {
+      console.warn('[emailAuth] /login Invalid OTP for key', key);
       return res.status(400).json({ success: false, message: 'Invalid OTP.' });
     }
 

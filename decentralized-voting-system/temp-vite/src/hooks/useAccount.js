@@ -116,6 +116,16 @@ export const useAccount = () => {
     const cleanOtp = String(otp ?? '').trim();
     const normalizedAadhaar = String(aadhaarNumber ?? '').replace(/\D/g, '');
     const normalizedEmail = String(email ?? '').trim().toLowerCase();
+    // Basic client-side validation to avoid 400s for trivial issues
+    if (!normalizedAadhaar || normalizedAadhaar.length < 4) {
+      throw new Error('Please enter a valid Aadhaar number.');
+    }
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (!cleanOtp || cleanOtp.length < 4) {
+      throw new Error('Please enter the 6-digit OTP.');
+    }
     // If context already has an address, use it
     if (account?.address) {
       const payload = {
@@ -125,19 +135,23 @@ export const useAccount = () => {
         otp: cleanOtp,
         ...(String(name ?? '').trim() ? { name: String(name).trim() } : {}),
       };
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
-
-      const data = res.data;
-      const newAccount = {
-        token: data.token,
-        address: account.address,
-        role: 'voter',
-        isAuthenticated: true,
-        ...data.voter,
-      };
-      localStorage.setItem('account', JSON.stringify(newAccount));
-      setAccount(newAccount);
-      return newAccount;
+      try {
+        const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
+        const data = res.data;
+        const newAccount = {
+          token: data.token,
+          address: account.address,
+          role: 'voter',
+          isAuthenticated: true,
+          ...data.voter,
+        };
+        localStorage.setItem('account', JSON.stringify(newAccount));
+        setAccount(newAccount);
+        return newAccount;
+      } catch (err) {
+        console.error('Login with OTP error details (existing account):', err?.response?.status, err?.response?.data, payload);
+        throw err;
+      }
     }
 
     // Otherwise, try to read existing accounts before prompting MetaMask
@@ -152,18 +166,23 @@ export const useAccount = () => {
           otp: cleanOtp,
           ...(String(name ?? '').trim() ? { name: String(name).trim() } : {}),
         };
-        const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
-        const data = res.data;
-        const newAccount = {
-          token: data.token,
-          address: addr,
-          role: 'voter',
-          isAuthenticated: true,
-          ...data.voter,
-        };
-        localStorage.setItem('account', JSON.stringify(newAccount));
-        setAccount(newAccount);
-        return newAccount;
+        try {
+          const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
+          const data = res.data;
+          const newAccount = {
+            token: data.token,
+            address: addr,
+            role: 'voter',
+            isAuthenticated: true,
+            ...data.voter,
+          };
+          localStorage.setItem('account', JSON.stringify(newAccount));
+          setAccount(newAccount);
+          return newAccount;
+        } catch (err) {
+          console.error('Login with OTP error details (existing eth_accounts):', err?.response?.status, err?.response?.data, payload);
+          throw err;
+        }
       }
     } catch (_) { /* ignore */ }
 
@@ -176,19 +195,23 @@ export const useAccount = () => {
       otp: cleanOtp,
       ...(String(name ?? '').trim() ? { name: String(name).trim() } : {}),
     };
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
-
-    const data = res.data;
-    const newAccount = {
-      token: data.token,
-      address,
-      role: 'voter',
-      isAuthenticated: true,
-      ...data.voter,
-    };
-    localStorage.setItem('account', JSON.stringify(newAccount));
-    setAccount(newAccount);
-    return newAccount;
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
+      const data = res.data;
+      const newAccount = {
+        token: data.token,
+        address,
+        role: 'voter',
+        isAuthenticated: true,
+        ...data.voter,
+      };
+      localStorage.setItem('account', JSON.stringify(newAccount));
+      setAccount(newAccount);
+      return newAccount;
+    } catch (err) {
+      console.error('Login with OTP error details (connectWallet path):', err?.response?.status, err?.response?.data, payload);
+      throw err;
+    }
   };
 
   return {
