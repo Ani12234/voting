@@ -7,6 +7,8 @@ import { VOTING_CONTRACT_ADDRESS } from '../config/config';
 import { VotingABI } from '../utils/contracts';
 import { isRegistered as chainIsRegistered, selfRegister as chainSelfRegister } from '../utils/registry';
 import { getInvoiceChallenge, signChallenge, downloadEncryptedInvoice, saveBase64Pdf } from '../utils/invoice';
+import { getInjectedProvider, isMobileUA, openInMetaMaskDeepLink } from '../utils/wallet';
+import ConnectWalletButton from '../components/ConnectWalletButton';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -25,7 +27,7 @@ const VoterDashboard = () => {
   const [isChainRegistered, setIsChainRegistered] = useState(false);
 
   // Simple mobile detection for UX hints
-  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isMobile = isMobileUA();
 
   const handleOptionChange = (pollIndex, optionIndex) => {
     setSelectedOptions(prev => ({
@@ -52,7 +54,7 @@ const VoterDashboard = () => {
       // 1) Get challenge
       const chall = await getInvoiceChallenge(voteId, account.token);
       // 2) Sign
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(getInjectedProvider());
       const { signature, address } = await signChallenge(provider, chall.challenge);
       // 3) Download
       toast.info('Preparing your encrypted invoice...');
@@ -120,9 +122,10 @@ const VoterDashboard = () => {
   // Load wallet/chain/registration status
   useEffect(() => {
     const refresh = async () => {
-      if (!window.ethereum) return;
+      const eth = getInjectedProvider();
+      if (!eth) return;
       try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
+        const provider = new ethers.BrowserProvider(eth);
         const signer = await provider.getSigner();
         const addr = await signer.getAddress();
         setWalletAddress(addr);
@@ -138,31 +141,32 @@ const VoterDashboard = () => {
       }
     };
     refresh();
-    if (window.ethereum) {
+    const eth = getInjectedProvider();
+    if (eth) {
       const onAccounts = () => refresh();
       const onChain = () => refresh();
-      window.ethereum.on?.('accountsChanged', onAccounts);
-      window.ethereum.on?.('chainChanged', onChain);
+      eth.on?.('accountsChanged', onAccounts);
+      eth.on?.('chainChanged', onChain);
       return () => {
-        window.ethereum.removeListener?.('accountsChanged', onAccounts);
-        window.ethereum.removeListener?.('chainChanged', onChain);
+        eth.removeListener?.('accountsChanged', onAccounts);
+        eth.removeListener?.('chainChanged', onChain);
       };
     }
   }, []);
 
   const handleManualRegister = async () => {
-    if (!window.ethereum) {
+    const eth = getInjectedProvider();
+    if (!eth) {
       if (isMobile) {
         toast.info('Opening in MetaMask Mobile...');
-        const url = window.location.href;
-        window.location.href = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
+        openInMetaMaskDeepLink(window.location.pathname + window.location.search);
       } else {
         toast.error('MetaMask not detected.');
       }
       return;
     }
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(eth);
       setIsRegChecking(true);
       toast.info('Registering wallet on-chain. Confirm in MetaMask...');
       await chainSelfRegister(provider, (tx) => toast.info(`Tx submitted: ${tx.hash}`));
@@ -184,11 +188,11 @@ const VoterDashboard = () => {
       return;
     }
 
-    if (!window.ethereum) {
+    const eth = getInjectedProvider();
+    if (!eth) {
       if (isMobile) {
         toast.info('Opening in MetaMask Mobile...');
-        const url = window.location.href;
-        window.location.href = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
+        openInMetaMaskDeepLink(window.location.pathname + window.location.search);
       } else {
         toast.error('Please install MetaMask wallet to vote.');
       }
@@ -197,7 +201,7 @@ const VoterDashboard = () => {
 
     try {
       // Setup provider and ensure on-chain registration
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(eth);
       const signer = await provider.getSigner();
 
       // Ensure wallet is registered on-chain; if not, self-register first
@@ -287,7 +291,8 @@ const VoterDashboard = () => {
             {isRegChecking ? 'Checking...' : (isChainRegistered ? 'Registered' : 'Not registered')}
           </div>
         </div>
-        <div className="mt-3 sm:mt-0 w-full sm:w-auto">
+        <div className="mt-3 sm:mt-0 w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+          <ConnectWalletButton className="w-full sm:w-auto" />
           <button
             onClick={handleManualRegister}
             disabled={isRegChecking || isChainRegistered || !window.ethereum}

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { ethers } from 'ethers';
+import { getInjectedProvider, isMobileUA, openInMetaMaskDeepLink } from '../utils/wallet';
 
 export const useAccount = () => {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState(false);
   const connectingRef = useRef(false);
-  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isMobile = isMobileUA();
 
   const disconnect = useCallback(() => {
     localStorage.removeItem('account');
@@ -27,7 +28,7 @@ export const useAccount = () => {
       setLoading(false);
     }
 
-    if (typeof window.ethereum !== 'undefined') {
+    if (typeof getInjectedProvider() !== 'undefined') {
       setIsMetaMaskInstalled(true);
     }
 
@@ -37,21 +38,19 @@ export const useAccount = () => {
       }
     };
 
-    window.ethereum?.on('accountsChanged', handleAccountsChanged);
+    getInjectedProvider()?.on?.('accountsChanged', handleAccountsChanged);
 
     return () => {
-      window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
+      getInjectedProvider()?.removeListener?.('accountsChanged', handleAccountsChanged);
     };
   }, [disconnect]);
 
   // Connect wallet and return address
   const connectWallet = async () => {
-    if (!window.ethereum) {
+    const eth = getInjectedProvider();
+    if (!eth) {
       if (isMobile) {
-        // Deep link to MetaMask Mobile dapp with current host
-        const url = window.location.href;
-        const target = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
-        window.location.href = target;
+        openInMetaMaskDeepLink(window.location.pathname + window.location.search);
         throw new Error('Opening MetaMask Mobile. Please retry after it loads.');
       }
       throw new Error('Please install MetaMask to continue.');
@@ -60,7 +59,7 @@ export const useAccount = () => {
     // Avoid concurrent requests that trigger MetaMask -32002 error
     if (connectingRef.current) {
       // If already connecting, try to read current accounts instead of re-requesting
-      const existing = await window.ethereum.request({ method: 'eth_accounts' });
+      const existing = await eth.request({ method: 'eth_accounts' });
       if (existing && existing.length > 0) {
         return { address: existing[0] };
       }
@@ -75,7 +74,7 @@ export const useAccount = () => {
         return { address: existing[0] };
       }
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(eth);
       await provider.send('eth_requestAccounts', []);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
@@ -164,7 +163,8 @@ export const useAccount = () => {
 
     // Otherwise, try to read existing accounts before prompting MetaMask
     try {
-      const existing = await window.ethereum?.request?.({ method: 'eth_accounts' });
+      const eth = getInjectedProvider();
+      const existing = await eth?.request?.({ method: 'eth_accounts' });
       if (existing && existing.length > 0) {
         const addr = existing[0];
         const payload = {
@@ -194,9 +194,8 @@ export const useAccount = () => {
       }
     } catch (_) { /* ignore */ }
 
-    if (!window.ethereum && isMobile) {
-      const url = window.location.href;
-      window.location.href = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
+    if (!getInjectedProvider() && isMobile) {
+      openInMetaMaskDeepLink(window.location.pathname + window.location.search);
       throw new Error('Opening MetaMask Mobile for wallet connection. Please retry after it loads.');
     }
 
@@ -234,6 +233,7 @@ export const useAccount = () => {
     login,
     requestOtp,
     loginWithEmailOtp,
+    connectWallet,
     disconnect,
     setAccount,
     isMetaMaskInstalled
