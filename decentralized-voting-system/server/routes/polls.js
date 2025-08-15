@@ -22,12 +22,16 @@ router.get('/', async (req, res) => {
             const pollObject = poll.toObject();
             const now = new Date();
             pollObject.status = poll.endTime && now > poll.endTime ? 'Closed' : 'Active';
+            // Include the contract address used for debugging/UX alignment
+            pollObject.contractAddress = votingContractAddress;
 
             if (pollObject.blockchainId !== undefined && pollObject.blockchainId !== null) {
                 try {
                     const onChainPoll = await votingContract.getPoll(pollObject.blockchainId);
+                    pollObject.onChainValid = true;
                     // onChainPoll.votes is an array of BigInts, convert them to numbers
-                                        const onChainVotes = onChainPoll[3].map(voteCount => Number(voteCount));
+                    // Note: ABI order is [title, description, options, startTime, endTime, votes]
+                    const onChainVotes = onChainPoll[5].map(voteCount => Number(voteCount));
 
                     // Update the votes in each option
                     pollObject.options.forEach((option, index) => {
@@ -37,6 +41,7 @@ router.get('/', async (req, res) => {
                     });
                 } catch (e) {
                     console.error(`Failed to fetch on-chain data for poll ${pollObject.blockchainId}:`, e.message);
+                    pollObject.onChainValid = false;
                     // If fetching fails, we can leave the votes as they are in the DB
                 }
             }
