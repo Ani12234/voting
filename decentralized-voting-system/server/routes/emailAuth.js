@@ -259,7 +259,48 @@ router.post('/login', [
         code: dbErr?.code,
         keyValue: dbErr?.keyValue,
       });
-      return res.status(500).json({ success: false, message: 'Database error saving voter.' });
+      // Handle duplicate key (E11000) gracefully by updating the existing record
+      if (dbErr && (dbErr.code === 11000 || /E11000/.test(String(dbErr.message)))) {
+        try {
+          const existing = await Voter.findOne({
+            $or: [
+              { aadharNumber: normalizedAadhaar },
+              { walletAddress: { $regex: new RegExp('^' + walletAddress + '$', 'i') } }
+            ]
+          });
+          if (existing) {
+            existing.walletAddress = walletAddress.toLowerCase();
+            existing.name = name || existing.name;
+            existing.email = String(email).toLowerCase();
+            existing.aadharNumber = normalizedAadhaar;
+            existing.status = 'approved';
+            existing.lastUpdated = new Date();
+            await existing.save();
+            voter = existing; // continue with this as the voter
+          } else {
+            // As a fallback, try an upsert keyed by aadharNumber
+            voter = await Voter.findOneAndUpdate(
+              { aadharNumber: normalizedAadhaar },
+              {
+                $set: {
+                  walletAddress: walletAddress.toLowerCase(),
+                  name: name || '',
+                  email: String(email).toLowerCase(),
+                  status: 'approved',
+                  lastUpdated: new Date(),
+                },
+                $setOnInsert: { aadharNumber: normalizedAadhaar }
+              },
+              { new: true, upsert: true }
+            );
+          }
+        } catch (retryErr) {
+          console.error('[emailAuth] Duplicate key retry failed:', retryErr?.message);
+          return res.status(500).json({ success: false, message: 'Database error saving voter.' });
+        }
+      } else {
+        return res.status(500).json({ success: false, message: 'Database error saving voter.' });
+      }
     }
 
     // Issue JWT
