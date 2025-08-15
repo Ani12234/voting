@@ -5,6 +5,7 @@ import { useAccountContext } from '../context/AccountContext';
 import { ethers } from 'ethers';
 import { VOTING_CONTRACT_ADDRESS } from '../config/config';
 import { VotingABI } from '../utils/contracts';
+import { isRegistered as chainIsRegistered, selfRegister as chainSelfRegister } from '../utils/registry';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -16,6 +17,10 @@ const VoterDashboard = () => {
   const [error, setError] = useState('');
   const [selectedOptions, setSelectedOptions] = useState({});
   const [votedPolls, setVotedPolls] = useState(new Set());
+  const [walletAddress, setWalletAddress] = useState('');
+  const [chainInfo, setChainInfo] = useState({ chainId: '', name: '' });
+  const [isRegChecking, setIsRegChecking] = useState(false);
+  const [isChainRegistered, setIsChainRegistered] = useState(false);
 
   const handleOptionChange = (pollIndex, optionIndex) => {
     setSelectedOptions(prev => ({
@@ -71,15 +76,64 @@ const VoterDashboard = () => {
     }
   }, [account, loadPolls]);
 
+  // Load wallet/chain/registration status
+  useEffect(() => {
+    const refresh = async () => {
+      if (!window.ethereum) return;
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const addr = await signer.getAddress();
+        setWalletAddress(addr);
+        const network = await provider.getNetwork();
+        setChainInfo({ chainId: network.chainId?.toString?.() || String(network.chainId), name: network.name || '' });
+        setIsRegChecking(true);
+        const reg = await chainIsRegistered(provider);
+        setIsChainRegistered(Boolean(reg));
+      } catch (e) {
+        console.warn('Registration status check failed:', e);
+      } finally {
+        setIsRegChecking(false);
+      }
+    };
+    refresh();
+    if (window.ethereum) {
+      const onAccounts = () => refresh();
+      const onChain = () => refresh();
+      window.ethereum.on?.('accountsChanged', onAccounts);
+      window.ethereum.on?.('chainChanged', onChain);
+      return () => {
+        window.ethereum.removeListener?.('accountsChanged', onAccounts);
+        window.ethereum.removeListener?.('chainChanged', onChain);
+      };
+    }
+  }, []);
+
+  const handleManualRegister = async () => {
+    if (!window.ethereum) {
+      toast.error('MetaMask not detected.');
+      return;
+    }
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      setIsRegChecking(true);
+      toast.info('Registering wallet on-chain. Confirm in MetaMask...');
+      await chainSelfRegister(provider, (tx) => toast.info(`Tx submitted: ${tx.hash}`));
+      toast.success('Wallet registered successfully.');
+      const reg = await chainIsRegistered(provider);
+      setIsChainRegistered(Boolean(reg));
+    } catch (e) {
+      console.error('Manual register failed:', e);
+      toast.error(e.reason || e.message || 'Registration failed');
+    } finally {
+      setIsRegChecking(false);
+    }
+  };
+
   const vote = async (pollIndex, poll) => {
     const optionIndex = selectedOptions[pollIndex];
     if (optionIndex === undefined) {
       toast.error('Please select an option before voting.');
-      return;
-    }
-
-    if (account?.hasVoted) {
-      toast.info('You have already used your one vote across all polls.');
       return;
     }
 
@@ -89,9 +143,26 @@ const VoterDashboard = () => {
     }
 
     try {
-      // Step 1: Cast vote on-chain via MetaMask
+      // Setup provider and ensure on-chain registration
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+
+      // Ensure wallet is registered on-chain; if not, self-register first
+      let registered = false;
+      try {
+        registered = await chainIsRegistered(provider);
+      } catch (e) {
+        console.warn('isRegistered check failed, attempting to continue:', e);
+      }
+      if (!registered) {
+        toast.info('Registering your wallet on-chain. Please confirm in MetaMask...');
+        await chainSelfRegister(provider, (tx) => {
+          toast.info(`Registration submitted: ${tx.hash}`);
+        });
+        toast.success('Wallet registered on-chain. Proceeding to vote...');
+      }
+
+      // Step 1: Cast vote on-chain via MetaMask
       const votingContract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VotingABI, signer);
 
       const blockchainId = poll.blockchainId;
@@ -108,7 +179,8 @@ const VoterDashboard = () => {
       toast.success('Your vote has been cast successfully on-chain!');
 
       // Step 2: Record vote in the backend to get an invoice
-      const optionText = poll.options[optionIndex].text;
+      const chosen = poll.options[optionIndex] || {};
+      const optionText = (chosen.text ?? chosen.name ?? '').toString();
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/polls/${poll._id}/vote`, {
           method: 'POST',
           headers: {
@@ -126,13 +198,6 @@ const VoterDashboard = () => {
       await response.json();
       toast.success('Vote recorded successfully!');
 
-      // Mark the account as having voted (Policy B) and persist
-      setAccount(prev => {
-        const updated = { ...(prev || {}), hasVoted: true };
-        try { localStorage.setItem('account', JSON.stringify(updated)); } catch (_) {}
-        return updated;
-      });
-
       loadPolls(); // Refresh polls to show updated vote counts
       setSelectedOptions(prev => ({ ...prev, [pollIndex]: undefined })); // Clear selection
 
@@ -140,14 +205,6 @@ const VoterDashboard = () => {
       console.error('Error casting vote:', error);
       const reason = error.reason || error.data?.message || error.message || 'An unknown error occurred.';
 
-      // If backend enforces Policy B and returns 409, reflect in UI
-      if (/already used your one vote/i.test(reason) || /409/.test(reason)) {
-        setAccount(prev => {
-          const updated = { ...(prev || {}), hasVoted: true };
-          try { localStorage.setItem('account', JSON.stringify(updated)); } catch (_) {}
-          return updated;
-        });
-      }
       toast.error(`Failed to cast vote: ${reason}`);
       setError(`Error casting vote: ${reason}`);
     }
@@ -157,6 +214,28 @@ const VoterDashboard = () => {
 
   return (
     <div className="container mx-auto p-4">
+      {/* Registration / network status banner */}
+      <div className="mb-4 p-4 rounded-lg border flex flex-col sm:flex-row sm:items-center sm:justify-between"
+           style={{ background: '#f8fafc', borderColor: '#e5e7eb' }}>
+        <div className="text-sm text-gray-700 space-y-1">
+          <div><span className="font-semibold">Network:</span> {chainInfo.name || 'Unknown'} ({chainInfo.chainId || '-'})</div>
+          <div className="break-all"><span className="font-semibold">Wallet:</span> {walletAddress || '-'}</div>
+          <div>
+            <span className="font-semibold">On-chain Registration:</span>{' '}
+            {isRegChecking ? 'Checking...' : (isChainRegistered ? 'Registered' : 'Not registered')}
+          </div>
+        </div>
+        <div className="mt-3 sm:mt-0">
+          <button
+            onClick={handleManualRegister}
+            disabled={isRegChecking || isChainRegistered || !window.ethereum}
+            className={`px-4 py-2 rounded-md text-white font-semibold ${isChainRegistered ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+          >
+            {isChainRegistered ? 'Already Registered' : (isRegChecking ? 'Registering...' : 'Register Wallet')}
+          </button>
+        </div>
+      </div>
+
       {error && (
         <div className="text-center p-4 mb-4 text-red-700 bg-red-100 rounded-lg">{error}</div>
       )}
@@ -175,11 +254,7 @@ const VoterDashboard = () => {
                   <h3 className="text-xl font-semibold text-gray-800">{poll.title}</h3>
                   <p className="text-gray-600 mt-2">{poll.description}</p>
                   
-                  {account?.hasVoted ? (
-                    <div className="mt-4 text-center text-blue-700 font-semibold bg-blue-50 p-3 rounded-lg">
-                      You have already used your one vote across all polls.
-                    </div>
-                  ) : votedPolls.has(poll._id) ? (
+                  {votedPolls.has(poll._id) ? (
                     <div className="mt-4 text-center text-green-600 font-semibold bg-green-50 p-3 rounded-lg">
                       You have already voted in this poll.
                     </div>
@@ -195,9 +270,8 @@ const VoterDashboard = () => {
                               checked={selectedOptions[pollIndex] === optionIndex}
                               onChange={() => handleOptionChange(pollIndex, optionIndex)}
                               className="form-radio h-5 w-5 text-blue-600 focus:ring-blue-500"
-                              disabled={account?.hasVoted}
                             />
-                            <span className="ml-4 text-lg text-gray-700">{option.text}</span>
+                            <span className="ml-4 text-lg text-gray-700">{option.text ?? option.name}</span>
                           </label>
                         ))}
                       </div>
@@ -205,7 +279,7 @@ const VoterDashboard = () => {
                         <button
                           onClick={() => vote(pollIndex, poll)}
                           className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
-                          disabled={account?.hasVoted || selectedOptions[pollIndex] === undefined}
+                          disabled={selectedOptions[pollIndex] === undefined}
                         >
                           <FaVoteYea className="inline-block mr-2" />
                           Cast Your Vote
