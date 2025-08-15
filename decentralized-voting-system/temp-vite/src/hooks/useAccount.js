@@ -7,6 +7,7 @@ export const useAccount = () => {
   const [loading, setLoading] = useState(true);
   const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState(false);
   const connectingRef = useRef(false);
+  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const disconnect = useCallback(() => {
     localStorage.removeItem('account');
@@ -46,6 +47,13 @@ export const useAccount = () => {
   // Connect wallet and return address
   const connectWallet = async () => {
     if (!window.ethereum) {
+      if (isMobile) {
+        // Deep link to MetaMask Mobile dapp with current host
+        const url = window.location.href;
+        const target = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
+        window.location.href = target;
+        throw new Error('Opening MetaMask Mobile. Please retry after it loads.');
+      }
       throw new Error('Please install MetaMask to continue.');
     }
 
@@ -185,6 +193,12 @@ export const useAccount = () => {
         }
       }
     } catch (_) { /* ignore */ }
+
+    if (!window.ethereum && isMobile) {
+      const url = window.location.href;
+      window.location.href = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
+      throw new Error('Opening MetaMask Mobile for wallet connection. Please retry after it loads.');
+    }
 
     // Finally prompt user to connect wallet, with -32002 guard built-in
     const { address } = await connectWallet();

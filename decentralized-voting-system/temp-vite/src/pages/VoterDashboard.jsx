@@ -6,6 +6,7 @@ import { ethers } from 'ethers';
 import { VOTING_CONTRACT_ADDRESS } from '../config/config';
 import { VotingABI } from '../utils/contracts';
 import { isRegistered as chainIsRegistered, selfRegister as chainSelfRegister } from '../utils/registry';
+import { getInvoiceChallenge, signChallenge, downloadEncryptedInvoice, saveBase64Pdf } from '../utils/invoice';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -17,16 +18,51 @@ const VoterDashboard = () => {
   const [error, setError] = useState('');
   const [selectedOptions, setSelectedOptions] = useState({});
   const [votedPolls, setVotedPolls] = useState(new Set());
+  const [voteIdByPoll, setVoteIdByPoll] = useState({});
   const [walletAddress, setWalletAddress] = useState('');
   const [chainInfo, setChainInfo] = useState({ chainId: '', name: '' });
   const [isRegChecking, setIsRegChecking] = useState(false);
   const [isChainRegistered, setIsChainRegistered] = useState(false);
+
+  // Simple mobile detection for UX hints
+  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const handleOptionChange = (pollIndex, optionIndex) => {
     setSelectedOptions(prev => ({
       ...prev,
       [pollIndex]: optionIndex
     }));
+  };
+
+  const downloadInvoice = async (poll) => {
+    try {
+      const voteId = voteIdByPoll[poll._id];
+      if (!voteId) {
+        toast.error('Vote record not found for this poll yet. Please refresh.');
+        return;
+      }
+      if (!account?.token) {
+        toast.error('You are not authenticated.');
+        return;
+      }
+      if (!window.ethereum) {
+        toast.error('MetaMask not detected.');
+        return;
+      }
+      // 1) Get challenge
+      const chall = await getInvoiceChallenge(voteId, account.token);
+      // 2) Sign
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const { signature, address } = await signChallenge(provider, chall.challenge);
+      // 3) Download
+      toast.info('Preparing your encrypted invoice...');
+      const { password, filename, pdfBase64, notEncrypted } = await downloadEncryptedInvoice(voteId, address, signature, account.token);
+      saveBase64Pdf(filename, pdfBase64);
+      toast.success(`Invoice downloaded. Password: ${password}${notEncrypted ? ' (unencrypted fallback)' : ''}`);
+    } catch (e) {
+      console.error('Invoice download error:', e);
+      toast.error(e.message || 'Failed to download invoice');
+    }
   };
 
   const loadPolls = useCallback(async () => {
@@ -56,6 +92,11 @@ const VoterDashboard = () => {
         const historyData = await historyResponse.json();
         const votedPollIds = new Set(historyData.map(vote => vote.poll?._id).filter(id => id));
         setVotedPolls(votedPollIds);
+        const mapObj = {};
+        historyData.forEach(v => {
+          if (v.poll?._id && v._id) mapObj[v.poll._id] = v._id;
+        });
+        setVoteIdByPoll(mapObj);
       } else {
         console.error('Could not fetch vote history');
       }
@@ -111,7 +152,13 @@ const VoterDashboard = () => {
 
   const handleManualRegister = async () => {
     if (!window.ethereum) {
-      toast.error('MetaMask not detected.');
+      if (isMobile) {
+        toast.info('Opening in MetaMask Mobile...');
+        const url = window.location.href;
+        window.location.href = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
+      } else {
+        toast.error('MetaMask not detected.');
+      }
       return;
     }
     try {
@@ -138,7 +185,13 @@ const VoterDashboard = () => {
     }
 
     if (!window.ethereum) {
-      toast.error('Please install MetaMask wallet to vote.');
+      if (isMobile) {
+        toast.info('Opening in MetaMask Mobile...');
+        const url = window.location.href;
+        window.location.href = `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`;
+      } else {
+        toast.error('Please install MetaMask wallet to vote.');
+      }
       return;
     }
 
@@ -234,11 +287,11 @@ const VoterDashboard = () => {
             {isRegChecking ? 'Checking...' : (isChainRegistered ? 'Registered' : 'Not registered')}
           </div>
         </div>
-        <div className="mt-3 sm:mt-0">
+        <div className="mt-3 sm:mt-0 w-full sm:w-auto">
           <button
             onClick={handleManualRegister}
             disabled={isRegChecking || isChainRegistered || !window.ethereum}
-            className={`px-4 py-2 rounded-md text-white font-semibold ${isChainRegistered ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`w-full sm:w-auto px-4 py-3 rounded-md text-white font-semibold ${isChainRegistered ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
           >
             {isChainRegistered ? 'Already Registered' : (isRegChecking ? 'Registering...' : 'Register Wallet')}
           </button>
@@ -264,30 +317,36 @@ const VoterDashboard = () => {
                   <p className="text-gray-600 mt-2">{poll.description}</p>
                   
                   {votedPolls.has(poll._id) ? (
-                    <div className="mt-4 text-center text-green-600 font-semibold bg-green-50 p-3 rounded-lg">
-                      You have already voted in this poll.
+                    <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-green-50 p-3 rounded-lg">
+                      <div className="text-green-700 font-semibold">You have already voted in this poll.</div>
+                      <button
+                        onClick={() => downloadInvoice(poll)}
+                        className="w-full sm:w-auto px-4 py-3 bg-emerald-600 text-white font-semibold rounded hover:bg-emerald-700 flex items-center justify-center"
+                      >
+                        <FaReceipt className="mr-2" /> Download Invoice
+                      </button>
                     </div>
                   ) : (
                     <>
                       <div className="mt-4 space-y-2">
                         {poll.options.map((option, optionIndex) => (
-                          <label key={optionIndex} className="flex items-center p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors">
+                          <label key={optionIndex} className="flex items-center p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors min-h-[48px]">
                             <input
                               type="radio"
                               name={`poll-${pollIndex}`}
                               value={optionIndex}
                               checked={selectedOptions[pollIndex] === optionIndex}
                               onChange={() => handleOptionChange(pollIndex, optionIndex)}
-                              className="form-radio h-5 w-5 text-blue-600 focus:ring-blue-500"
+                              className="form-radio h-6 w-6 text-blue-600 focus:ring-blue-500"
                             />
-                            <span className="ml-4 text-lg text-gray-700">{option.text ?? option.name}</span>
+                            <span className="ml-4 text-base sm:text-lg text-gray-700">{option.text ?? option.name}</span>
                           </label>
                         ))}
                       </div>
-                      <div className="mt-4 flex items-center justify-between">
+                      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <button
                           onClick={() => vote(pollIndex, poll)}
-                          className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
+                          className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
                           disabled={selectedOptions[pollIndex] === undefined}
                         >
                           <FaVoteYea className="inline-block mr-2" />
