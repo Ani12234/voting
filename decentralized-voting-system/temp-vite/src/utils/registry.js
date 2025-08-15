@@ -15,8 +15,10 @@ export async function isRegistered(provider) {
 
 export async function selfRegister(provider, onTx) {
   const signer = await provider.getSigner();
+  const addr = await signer.getAddress();
   const registry = getRegistry(signer);
-  const tx = await registry.selfRegister();
+  // Contract ABI exposes registerVoter(address) (no selfRegister in ABI)
+  const tx = await registry.registerVoter(addr);
   if (onTx) onTx(tx);
   const receipt = await tx.wait();
   return receipt;
