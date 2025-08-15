@@ -15,10 +15,9 @@ export async function isRegistered(provider) {
 
 export async function selfRegister(provider, onTx) {
   const signer = await provider.getSigner();
-  const addr = await signer.getAddress();
   const registry = getRegistry(signer);
-  // Contract ABI exposes registerVoter(address) (no selfRegister in ABI)
-  const tx = await registry.registerVoter(addr);
+  // Call selfRegister (now present in ABI) so user can register their own wallet
+  const tx = await registry.selfRegister();
   if (onTx) onTx(tx);
   const receipt = await tx.wait();
   return receipt;
