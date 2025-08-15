@@ -183,7 +183,10 @@ router.post('/login', [
         code: chainErr?.code,
         reason: chainErr?.reason,
       });
-      return res.status(500).json({ success: false, message: 'Blockchain interaction failed.' });
+      if (String(process.env.ENFORCE_CHAIN_REGISTER).toLowerCase() === 'true') {
+        return res.status(500).json({ success: false, message: 'Blockchain interaction failed.' });
+      }
+      // Otherwise, proceed with login (best-effort chain registration)
     }
 
     // Upsert local voter as approved with de-duplication (unique on aadharNumber and walletAddress)
