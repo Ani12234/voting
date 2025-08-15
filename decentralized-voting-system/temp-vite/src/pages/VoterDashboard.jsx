@@ -162,12 +162,21 @@ const VoterDashboard = () => {
         toast.success('Wallet registered on-chain. Proceeding to vote...');
       }
 
-      // Step 1: Cast vote on-chain via MetaMask
+      // Step 1: Validate poll exists on-chain, then cast vote
       const votingContract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VotingABI, signer);
 
       const blockchainId = poll.blockchainId;
       if (blockchainId === undefined || blockchainId === null) {
         toast.error('This poll is not properly synced with the blockchain.');
+        return;
+      }
+
+      // Pre-validate poll existence to avoid "Invalid poll ID" reverts
+      try {
+        await votingContract.getPoll(BigInt(blockchainId));
+      } catch (e) {
+        console.error('On-chain poll lookup failed:', e);
+        toast.error('This poll does not exist on the currently configured Voting contract. Please ask admin to re-create it.');
         return;
       }
 
