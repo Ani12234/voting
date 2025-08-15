@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@chakra-ui/react';
 import { ethers } from 'ethers';
+import { getInjectedProvider, isMobileUA, openInMetaMaskDeepLink } from '../../../utils/wallet';
 
 const VoterLogin = () => {
   const navigate = useNavigate();
@@ -14,10 +15,16 @@ const VoterLogin = () => {
     setIsLoading(true);
     setError('');
     try {
-      if (!window.ethereum) {
-        throw new Error('Please install MetaMask');
+      const eth = getInjectedProvider();
+      if (!eth) {
+        if (isMobileUA()) {
+          // Deep-link to MetaMask Mobile with current path so it opens the dapp
+          openInMetaMaskDeepLink(window.location.pathname + window.location.search);
+          throw new Error('Opening in MetaMask Mobile...');
+        }
+        throw new Error('MetaMask not detected. Install from https://metamask.io/download/');
       }
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(eth);
       await provider.send('eth_requestAccounts', []);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();

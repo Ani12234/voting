@@ -1,3 +1,6 @@
+  const eth = getInjectedProvider();
+  const isMobile = isMobileUA();
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -6,10 +9,11 @@ import Card from '../components/ui/Card';
 import { useAccountContext } from '../context/AccountContext';
 import Modal from '../components/ui/Modal';
 import OtpInput from '../components/ui/OtpInput';
+import { getInjectedProvider, isMobileUA, openInMetaMaskDeepLink } from '../utils/wallet';
 
 const VoterLogin = () => {
   const navigate = useNavigate();
-  const { requestOtp, loginWithEmailOtp, isMetaMaskInstalled } = useAccountContext();
+  const { requestOtp, loginWithEmailOtp } = useAccountContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -93,9 +97,25 @@ const VoterLogin = () => {
             <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">Voter Login</h2>
             <p className="text-center text-gray-500 mb-6">Login via Aadhaar + Email OTP (wallet required)</p>
 
-            {!isMetaMaskInstalled && (
+            {!eth && (
               <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded-md text-sm">
-                MetaMask is not installed. Please install it to continue.
+                {isMobile ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Open this page in MetaMask’s in‑app browser.</span>
+                    <Button
+                      type="button"
+                      onClick={() => openInMetaMaskDeepLink(window.location.pathname + window.location.search)}
+                      className="px-3 py-1 text-xs"
+                    >
+                      Open in MetaMask
+                    </Button>
+                  </div>
+                ) : (
+                  <span>
+                    MetaMask is not detected. Please install it from{' '}
+                    <a className="underline" href="https://metamask.io/download/" target="_blank" rel="noreferrer">metamask.io</a>.
+                  </span>
+                )}
               </div>
             )}
 
@@ -134,7 +154,7 @@ const VoterLogin = () => {
             </div>
 
             {!otpSent ? (
-              <Button onClick={handleSendOtp} disabled={isLoading || !isMetaMaskInstalled || !aadhaarNumber || !email} className="w-full">
+              <Button onClick={handleSendOtp} disabled={isLoading || !aadhaarNumber || !email} className="w-full">
                 {isLoading ? 'Sending OTP...' : 'Send OTP'}
               </Button>
             ) : (
@@ -145,7 +165,7 @@ const VoterLogin = () => {
                     Enter OTP
                   </Button>
                 </div>
-                <Button onClick={handleVerifyAndLogin} disabled={isLoading || !isMetaMaskInstalled || otp.trim().length !== 6} className="w-full">
+                <Button onClick={handleVerifyAndLogin} disabled={isLoading || otp.trim().length !== 6} className="w-full">
                   {isLoading ? 'Verifying...' : 'Verify & Login'}
                 </Button>
               </div>

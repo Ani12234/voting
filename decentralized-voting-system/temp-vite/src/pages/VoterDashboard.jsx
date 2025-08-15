@@ -295,7 +295,7 @@ const VoterDashboard = () => {
           <ConnectWalletButton className="w-full sm:w-auto" />
           <button
             onClick={handleManualRegister}
-            disabled={isRegChecking || isChainRegistered || !window.ethereum}
+            disabled={isRegChecking || isChainRegistered}
             className={`w-full sm:w-auto px-4 py-3 rounded-md text-white font-semibold ${isChainRegistered ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
           >
             {isChainRegistered ? 'Already Registered' : (isRegChecking ? 'Registering...' : 'Register Wallet')}
