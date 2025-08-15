@@ -118,13 +118,14 @@ export const useAccount = () => {
     const normalizedEmail = String(email ?? '').trim().toLowerCase();
     // If context already has an address, use it
     if (account?.address) {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
+      const payload = {
         aadhaarNumber: normalizedAadhaar,
         email: normalizedEmail,
         walletAddress: account.address,
         otp: cleanOtp,
-        name,
-      });
+        ...(String(name ?? '').trim() ? { name: String(name).trim() } : {}),
+      };
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
 
       const data = res.data;
       const newAccount = {
@@ -144,13 +145,14 @@ export const useAccount = () => {
       const existing = await window.ethereum?.request?.({ method: 'eth_accounts' });
       if (existing && existing.length > 0) {
         const addr = existing[0];
-        const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
+        const payload = {
           aadhaarNumber: normalizedAadhaar,
           email: normalizedEmail,
           walletAddress: addr,
           otp: cleanOtp,
-          name,
-        });
+          ...(String(name ?? '').trim() ? { name: String(name).trim() } : {}),
+        };
+        const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
         const data = res.data;
         const newAccount = {
           token: data.token,
@@ -167,13 +169,14 @@ export const useAccount = () => {
 
     // Finally prompt user to connect wallet, with -32002 guard built-in
     const { address } = await connectWallet();
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, {
+    const payload = {
       aadhaarNumber: normalizedAadhaar,
       email: normalizedEmail,
       walletAddress: address,
       otp: cleanOtp,
-      name,
-    });
+      ...(String(name ?? '').trim() ? { name: String(name).trim() } : {}),
+    };
+    const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/email-auth/login`, payload);
 
     const data = res.data;
     const newAccount = {

@@ -120,7 +120,8 @@ router.post('/login', [
   body('email').isEmail().withMessage('Valid email required'),
   body('walletAddress').isString().withMessage('Wallet address required'),
   body('otp').isLength({ min: 4 }).withMessage('OTP required'),
-  body('name').optional().trim().isLength({ min: 1 }).withMessage('Name must be non-empty if provided'),
+  // Accept empty string as not provided; only validate if a non-empty value is actually sent
+  body('name').optional({ nullable: true, checkFalsy: true }).trim().isLength({ min: 1 }).withMessage('Name must be non-empty if provided'),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
