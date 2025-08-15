@@ -29,9 +29,12 @@ router.get('/', async (req, res) => {
                 try {
                     const onChainPoll = await votingContract.getPoll(pollObject.blockchainId);
                     pollObject.onChainValid = true;
-                    // onChainPoll.votes is an array of BigInts, convert them to numbers
-                    // Note: ABI order is [title, description, options, startTime, endTime, votes]
-                    const onChainVotes = onChainPoll[5].map(voteCount => Number(voteCount));
+                    // ABI order (artifact): [title, description, options, votes, endTime, isActive]
+                    const votesArray = Array.isArray(onChainPoll.votes) ? onChainPoll.votes : onChainPoll[3];
+                    const onChainVotes = (votesArray || []).map(voteCount => Number(voteCount));
+                    // Optionally expose endTime/isActive for UI if needed
+                    pollObject.endTimeOnChain = Number(onChainPoll.endTime ?? onChainPoll[4]);
+                    pollObject.isActiveOnChain = Boolean(onChainPoll.isActive ?? onChainPoll[5]);
 
                     // Update the votes in each option
                     pollObject.options.forEach((option, index) => {

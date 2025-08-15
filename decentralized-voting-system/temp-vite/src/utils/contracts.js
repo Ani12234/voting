@@ -6,7 +6,7 @@ export const VotingABI = [
       { "internalType": "string", "name": "_title", "type": "string" },
       { "internalType": "string", "name": "_description", "type": "string" },
       { "internalType": "string[]", "name": "_options", "type": "string[]" },
-      { "internalType": "uint256", "name": "_durationMinutes", "type": "uint256" }
+      { "internalType": "uint256", "name": "_duration", "type": "uint256" }
     ],
     "name": "createPoll",
     "outputs": [],
@@ -30,9 +30,9 @@ export const VotingABI = [
       { "internalType": "string", "name": "title", "type": "string" },
       { "internalType": "string", "name": "description", "type": "string" },
       { "internalType": "string[]", "name": "options", "type": "string[]" },
-      { "internalType": "uint256", "name": "startTime", "type": "uint256" },
+      { "internalType": "uint256[]", "name": "votes", "type": "uint256[]" },
       { "internalType": "uint256", "name": "endTime", "type": "uint256" },
-      { "internalType": "uint256[]", "name": "votes", "type": "uint256[]" }
+      { "internalType": "bool", "name": "isActive", "type": "bool" }
     ],
     "stateMutability": "view",
     "type": "function"
