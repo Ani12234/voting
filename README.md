@@ -58,61 +58,115 @@ Follow these instructions to set up and run the project on your local machine.
 
 - [Node.js](https://nodejs.org/) (v18 or later)
 - [npm](https://www.npmjs.com/)
-- [MetaMask](https://metamask.io/) browser extension
+- Wallet & network:
+  - Desktop: MetaMask browser extension
+  - Mobile: MetaMask Mobile app (use its in-app browser)
+- Sepolia ETH in your wallet (for on-chain actions)
+- Backend API reachable at `VITE_API_URL` (default `http://localhost:5000`)
 
-### Installation & Setup
+---
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-username/decentralized-voting-system.git
-    cd decentralized-voting-system
-    ```
+## 🔧 Configuration
 
-2.  **Install server dependencies:**
-    ```bash
-    cd server
-    npm install
-    ```
+### 1) Backend environment
+Create `decentralized-voting-system/server/.env` with:
 
-3.  **Install client dependencies:**
-    ```bash
-    cd ../client/temp-vite
-    npm install
-    ```
+```env
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+SEPOLIA_RPC_URL=your_sepolia_rpc_url_from_alchemy_or_infura
+ADMIN_PRIVATE_KEY=your_admin_wallet_private_key
+# Set this to the deployed Voting contract address
+VOTING_CONTRACT_ADDRESS=0xYourVotingAddress
+# Optional: VoterRegistry address if the server uses it directly
+VOTER_REGISTRY_CONTRACT_ADDRESS=0xYourRegistryAddress
+```
 
-4.  **Set up environment variables:**
+Start the API server on port 5000 (see Run section below).
 
-    Create a `.env` file in the `server` directory and add the following variables:
+### 2) Frontend environment (Vite)
+Create `decentralized-voting-system/temp-vite/.env` with:
 
-    ```env
-    MONGODB_URI=your_mongodb_connection_string
-    JWT_SECRET=your_jwt_secret
-    SEPOLIA_RPC_URL=your_sepolia_rpc_url_from_alchemy_or_infura
-    ADMIN_PRIVATE_KEY=your_admin_wallet_private_key
-    VOTING_CONTRACT_ADDRESS=your_deployed_contract_address
-    ```
+```env
+VITE_API_URL=http://localhost:5000
+VITE_SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/<your-key>
+VITE_VOTING_CONTRACT_ADDRESS=0xYourVotingAddress
+VITE_VOTER_REGISTRY_CONTRACT_ADDRESS=0xYourRegistryAddress
+```
 
-    Create a `.env` file in the `client/temp-vite` directory and add the following:
+Notes:
+- Frontend reads addresses and RPC from `src/config/config.js` via the above VITE_ variables.
+- If you omit them, defaults in `config.js` will be used (likely not your deployment).
 
-    ```env
-    VITE_API_URL=http://localhost:5000
-    ```
+---
 
-5.  **Run the application:**
+## ▶️ Run the Application
 
-    -   **Start the backend server:**
-        ```bash
-        cd ../../server
-        npm run dev
-        ```
+1. Install dependencies (first time only):
 
-    -   **Start the frontend client:**
-        ```bash
-        cd ../client/temp-vite
-        npm run dev
-        ```
+```bash
+# From repo root
+cd decentralized-voting-system/server
+npm install
 
-The application should now be running. Open your browser and navigate to the URL provided by Vite (usually `http://localhost:5173`).
+cd ../temp-vite
+npm install
+```
+
+2. Start services:
+
+```bash
+# Terminal 1 (API)
+cd decentralized-voting-system/server
+npm run dev
+
+# Terminal 2 (Frontend)
+cd decentralized-voting-system/temp-vite
+npm run dev
+```
+
+The app will be available at the Vite URL (e.g., `http://localhost:5173`).
+
+---
+
+## 🗳️ How to Vote
+
+Desktop (Chrome/Brave + MetaMask):
+- **Open the app**: Visit the Vite URL (e.g., `http://localhost:5173`). Ensure MetaMask extension is installed and unlocked.
+- **Connect & Login**: Go to `Login` and connect your wallet. A session token is saved locally.
+- **View Polls**: Open `Polls` or `Dashboard` to see active polls.
+- **Register (if asked)**: If your wallet isn’t registered on-chain, click Register and confirm in MetaMask.
+- **Cast Vote**: Select your choice and confirm the transaction in MetaMask.
+- **Download Receipt**: After confirmation, download your encrypted invoice/receipt from the dashboard.
+
+Mobile (MetaMask Mobile in-app browser):
+- **Open MetaMask app** → Browser tab → enter your Vite URL.
+- **Connect & Login**: Use the `Login` page to connect within MetaMask’s browser.
+- **View Polls**: Navigate to `Polls`/`Dashboard`.
+- **Register & Vote**: If prompted, register on-chain, then vote and confirm the tx in-app.
+- **Receipt**: Download the encrypted invoice after success.
+
+Mobile:
+- Use MetaMask Mobile’s in-app browser. Open your local URL inside MetaMask to interact with the DApp smoothly.
+
+---
+
+## 🧪 Demo: Aadhaar + Email
+
+A demo route showcases adding Aadhaar + Email for illustrative purposes.
+
+- Navigate to: `/demo/aadhaar`
+- Component used: `DemoAadhaarAdmin` (wired in `src/App.jsx`)
+- This is a demonstration flow and does not store sensitive information on-chain. Use it only for demo/testing.
+
+---
+
+## 🔍 Useful Source References
+
+- Frontend routes: `decentralized-voting-system/temp-vite/src/App.jsx`
+- Layout / Navbar: `decentralized-voting-system/temp-vite/src/components/Layout.jsx`
+- Contracts config: `decentralized-voting-system/temp-vite/src/config/config.js`
+- Voter dashboard: `decentralized-voting-system/temp-vite/src/pages/VoterDashboard.jsx`
 
 ---
 
