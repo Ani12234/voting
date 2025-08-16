@@ -153,11 +153,22 @@ Mobile:
 
 ## 🧪 Demo: Aadhaar + Email
 
-A demo route showcases adding Aadhaar + Email for illustrative purposes.
+This demo showcases a mock Aadhaar + Email step to illustrate how a real-world voting system can bind a wallet to a unique, verified person before allowing on-chain voting.
 
-- Navigate to: `/demo/aadhaar`
-- Component used: `DemoAadhaarAdmin` (wired in `src/App.jsx`)
-- This is a demonstration flow and does not store sensitive information on-chain. Use it only for demo/testing.
+Why it matters:
+- **Identity & Uniqueness (KYC-like step)**: Helps ensure one person gets one voting identity, reducing duplicate or fake registrations.
+- **Sybil Resistance**: Prevents attackers from creating multiple wallets to gain extra votes.
+- **Account Recovery & Notifications**: Email can be used for confirmations, non-sensitive notifications, or retrieving invoices.
+
+Important notes:
+- This is a mock/demo flow. It is not a real KYC and does not validate actual Aadhaar data.
+- No Aadhaar details are written to the blockchain. On-chain state only tracks wallet registration and votes.
+- Use only for demonstration/testing; do not input real personal data.
+
+How to try it:
+- Navigate to: `/demo/aadhaar` (there is also a Home button that links to this route).
+- Route wiring: `src/App.jsx` → `DemoAadhaarAdmin` component.
+- Enter sample Aadhaar number and email, submit, and observe the mocked verification flow and UI.
 
 ---
 
