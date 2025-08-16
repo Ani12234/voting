@@ -131,6 +131,9 @@ The app will be available at the Vite URL (e.g., `http://localhost:5173`).
 
 ## 🗳️ How to Vote
 
+Before you vote (recommended for demo/testing):
+- Open `/demo/aadhaar`, enter sample details (e.g., Aadhaar: `1234-5678-9012`, Email: `demo@example.com`), submit, then proceed to Login.
+
 Desktop (Chrome/Brave + MetaMask):
 - **Open the app**: Visit the Vite URL (e.g., `http://localhost:5173`). Ensure MetaMask extension is installed and unlocked.
 - **Connect & Login**: Go to `Login` and connect your wallet. A session token is saved locally.
@@ -165,10 +168,11 @@ Important notes:
 - No Aadhaar details are written to the blockchain. On-chain state only tracks wallet registration and votes.
 - Use only for demonstration/testing; do not input real personal data.
 
-How to try it:
+How to try it (quick path):
 - Navigate to: `/demo/aadhaar` (there is also a Home button that links to this route).
 - Route wiring: `src/App.jsx` → `DemoAadhaarAdmin` component.
-- Enter sample Aadhaar number and email, submit, and observe the mocked verification flow and UI.
+- Enter small sample details (e.g., Aadhaar: `1234-5678-9012`, Email: `demo@example.com`) and submit to simulate verification.
+- Then go to `Login`, connect your wallet, and proceed to vote as described in “How to Vote”.
 
 ---
 
